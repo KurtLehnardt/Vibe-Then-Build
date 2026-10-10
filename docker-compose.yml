@@ -66,3 +66,43 @@ services:
         condition: service_healthy
       gateway:
         condition: service_started
+
+  # Postiz, self-hosted, for social publishing. Optional and heavy: it brings
+  # its own Postgres and Redis, separate from the ones above, so it is left
+  # commented out rather than wired into `depends_on`. Loop Engine works fully
+  # without it — publishing simply stays unavailable until POSTIZ_URL and
+  # POSTIZ_API_KEY are set in .env. See docs/integrations.md for the decision
+  # record on why publishing is delegated to Postiz rather than built in-tree.
+  #
+  # To enable: uncomment this block and the two services it depends on below,
+  # then set POSTIZ_URL=http://localhost:5000 and POSTIZ_API_KEY in .env (the
+  # key comes from Postiz Settings -> Public API once Postiz is running).
+  #
+  # postiz:
+  #   image: ghcr.io/gitroomhq/postiz-app:latest
+  #   environment:
+  #     DATABASE_URL: postgresql://postiz:postiz@postiz-db:5432/postiz
+  #     REDIS_URL: redis://postiz-redis:6379
+  #     JWT_SECRET: change-me
+  #     FRONTEND_URL: http://localhost:5000
+  #     NEXT_PUBLIC_BACKEND_URL: http://localhost:5000/api
+  #     BACKEND_INTERNAL_URL: http://localhost:5000
+  #   ports:
+  #     - "5000:5000"
+  #   depends_on:
+  #     - postiz-db
+  #     - postiz-redis
+  #
+  # postiz-db:
+  #   image: postgres:17-alpine
+  #   environment:
+  #     POSTGRES_USER: postiz
+  #     POSTGRES_PASSWORD: postiz
+  #     POSTGRES_DB: postiz
+  #   volumes:
+  #     - ./postiz-pgdata:/var/lib/postgresql/data
+  #
+  # postiz-redis:
+  #   image: redis:7-alpine
+  #   volumes:
+  #     - ./postiz-redis-data:/data

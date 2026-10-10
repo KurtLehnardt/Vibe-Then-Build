@@ -110,6 +110,7 @@ src/lib/ai/ledger.ts        per-call cost; local priced at zero, deliberately
 src/lib/pricing/            value-based pricing and the margin floor, as code
 src/lib/voice/              few-shot voice selection from your own posts
 src/lib/progress/           funnel conversion, weakest-stage detection, margin
+src/lib/channels/           adapter interface; one integration per external system, behind it
 src/app/                    Progress, Approvals, Pipeline, Brand, Policy
 ```
 
@@ -132,15 +133,26 @@ no action ships above its own ceiling.
 
 - **P0 (this commit)** — schema, policy engine, model router, cost ledger, pricing calculator,
   voice model, progress tracking, read-only cockpit, local stack.
-- **P1** — channel adapter interface; Gmail/SMTP adapter; LinkedIn draft-and-assist; job runner for
-  sequences and scheduling; lead import and ICP scoring; reply classification.
+- **P1 (landing now)** — channel adapter interface (`src/lib/channels/types.ts`); publishing
+  through Postiz; lead import from OpenOutreach; Gmail/SMTP adapter; LinkedIn draft-and-assist; job
+  runner for sequences and scheduling; ICP scoring; reply classification.
 - **P2** — proposal generation from discovery notes; e-signature; Upwork and RFP feed adapters with
   fit scoring.
 - **P3** — delivery templates and handoff-pack generation; eval runner results; per-engagement
   margin report; adapter contribution guide.
 
-For publishing to social platforms, P1 will integrate an existing scheduler rather than rebuild one
-— see below.
+For publishing to social platforms, P1 integrates Postiz rather than rebuilding a scheduler; for
+lead discovery it delegates to OpenOutreach. See [Integrations](#integrations) for how and why.
+
+## Integrations
+
+Loop Engine composes with existing open-source tools at the process boundary rather than merging
+their source: publishing goes to Postiz over its public API, lead discovery delegates to
+OpenOutreach as a separate process whose CSV export is read on disk. Both are optional — unset
+their environment variables and the rest of the system runs exactly as before. See
+[docs/integrations.md](docs/integrations.md) for the full decision record, including why Twenty
+(CRM) was deliberately left out and why Linki cannot be used at all, and for how to add a new
+adapter against `src/lib/channels/types.ts`.
 
 ## Prior art
 
@@ -149,9 +161,9 @@ problem, use it instead.
 
 | Project | License | What it covers |
 |---|---|---|
-| [Postiz](https://github.com/gitroomhq/postiz-app) | AGPL-3.0 | Social scheduling and publishing at scale. The content-distribution problem is solved here. |
+| [Postiz](https://github.com/gitroomhq/postiz-app) | AGPL-3.0 | Social scheduling and publishing at scale. The content-distribution problem is solved here. How we use it: P1 publishes through its public API rather than rebuilding a scheduler — see [Integrations](#integrations). |
 | [Twenty](https://github.com/twentyhq/twenty) | AGPL-3.0 | A full modern CRM, far beyond this project's lean pipeline. |
-| [OpenOutreach](https://github.com/eracle/OpenOutreach) | GPL-3.0 | ICP-driven B2B lead discovery and email outreach. Takes the same no-LinkedIn-automation stance. |
+| [OpenOutreach](https://github.com/eracle/OpenOutreach) | GPL-3.0 | ICP-driven B2B lead discovery and email outreach. Takes the same no-LinkedIn-automation stance. How we use it: P1 imports leads from its CSV export as a separate process — see [Integrations](#integrations). |
 | [marketing-dashboard](https://github.com/builderz-labs/marketing-dashboard) | MIT | Local-first marketing ops cockpit: CRM, outreach, content, approvals. Closest analogue to this project's shell. |
 | [Linki](https://github.com/moaljumaa/linki) | Sustainable Use | Self-hosted LinkedIn + email sequencing with browser-side LinkedIn auth. |
 | [LinkedGrow](https://github.com/DigiHold/LinkedGrow) | AGPL-3.0 | Agentic LinkedIn outreach via real-Chrome automation. The approach this project deliberately does not take. |

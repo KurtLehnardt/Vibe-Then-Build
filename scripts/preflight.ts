@@ -4,7 +4,24 @@
  */
 export {};
 
-const checks: Array<{ name: string; run: () => Promise<string | null> }> = [
+/**
+ * A check reports one of three outcomes, and the distinction matters to the
+ * reader: null means it passed, a Skipped means the integration is not
+ * configured and that is a legitimate state, and a string is a real failure
+ * whose text names the command that fixes it. Printing a skip as "ok" would
+ * tell an operator that Postiz is reachable when it was never configured.
+ */
+interface Skipped {
+  skipped: string;
+}
+
+type CheckResult = string | Skipped | null;
+
+function skip(reason: string): Skipped {
+  return { skipped: reason };
+}
+
+const checks: Array<{ name: string; run: () => Promise<CheckResult> }> = [
   {
     name: "Postgres reachable",
     run: async () => {
@@ -58,22 +75,80 @@ const checks: Array<{ name: string; run: () => Promise<string | null> }> = [
         ? "The kill switch is ON, so nothing will send. Set LOOP_KILL_SWITCH=false when ready."
         : null,
   },
+  {
+    name: "Postiz reachable",
+    run: async () => {
+      const url = process.env.POSTIZ_URL;
+      const key = process.env.POSTIZ_API_KEY;
+      if (!url || !key) {
+        return skip("POSTIZ_URL or POSTIZ_API_KEY is unset, so publishing is unavailable.");
+      }
+      try {
+        const res = await fetch(`${url}/public/v1/posts`, {
+          headers: { Authorization: key },
+          signal: AbortSignal.timeout(3000),
+        });
+        // A rejected key is a configuration failure, not a healthy instance:
+        // reporting it as reachable would hide the one problem this check
+        // exists to catch. Other 4xx responses mean the endpoint answered,
+        // which is all this check needs to prove.
+        if (res.status === 401 || res.status === 403) {
+          return `Postiz at ${url} rejected the API key (${res.status}). Generate a new one in Postiz under Settings -> Public API and update POSTIZ_API_KEY.`;
+        }
+        return res.status >= 500
+          ? `Postiz at ${url} returned ${res.status}. Run: docker compose up -d postiz`
+          : null;
+      } catch (e) {
+        return `Cannot reach Postiz at ${url}. Run: docker compose up -d postiz (${(e as Error).message})`;
+      }
+    },
+  },
+  {
+    name: "OpenOutreach export directory",
+    run: async () => {
+      const dir = process.env.OPENOUTREACH_EXPORT_DIR;
+      if (!dir) {
+        return skip("OPENOUTREACH_EXPORT_DIR is unset, so lead import is unavailable.");
+      }
+      const { access } = await import("node:fs/promises");
+      try {
+        await access(dir);
+        return null;
+      } catch {
+        return `OPENOUTREACH_EXPORT_DIR is set to ${dir}, which does not exist. Run: mkdir -p ${dir}`;
+      }
+    },
+  },
 ];
 
 let failed = 0;
+let skipped = 0;
+
 for (const check of checks) {
-  const problem = await check.run();
-  if (problem) {
-    failed++;
-    console.log(`  FAIL  ${check.name}\n        ${problem}`);
-  } else {
+  const result = await check.run();
+
+  if (result === null) {
     console.log(`  ok    ${check.name}`);
+    continue;
   }
+
+  if (typeof result === "object") {
+    skipped++;
+    console.log(`  skip  ${check.name}\n        ${result.skipped}`);
+    continue;
+  }
+
+  failed++;
+  console.log(`  FAIL  ${check.name}\n        ${result}`);
 }
+
+const tail = skipped > 0 ? ` ${skipped} optional integration(s) not configured.` : "";
 
 console.log(
   failed === 0
-    ? "\nPreflight passed. Start with: pnpm dev"
-    : `\n${failed} check(s) need attention before the loop will run.`,
+    ? `\nPreflight passed. Start with: pnpm dev${tail}`
+    : `\n${failed} check(s) need attention before the loop will run.${tail}`,
 );
+
+// Skips never fail the run; an unconfigured optional integration is a choice.
 process.exit(failed === 0 ? 0 : 1);
