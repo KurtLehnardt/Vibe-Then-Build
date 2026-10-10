@@ -5,7 +5,10 @@
   "license": "AGPL-3.0-or-later",
   "description": "Operator cockpit for an AI consulting practice: brand, content, outreach, pipeline, delivery, and local-model margin tracking. Self-hosted, policy-gated, free to run on Ollama.",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
