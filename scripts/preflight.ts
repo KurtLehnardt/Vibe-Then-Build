@@ -4,7 +4,38 @@
  */
 export {};
 
-const checks: Array<{ name: string; run: () => Promise<string | null> }> = [
+import { buildRegistry } from "../src/lib/channels/registry";
+import type { ChannelId } from "../src/lib/channels/types";
+
+/**
+ * A check reports one of three outcomes, and the distinction matters to the
+ * reader: null means it passed, a Skipped means the integration is not
+ * configured and that is a legitimate state, and a string is a real failure
+ * whose text names the command that fixes it. Printing a skip as "ok" would
+ * tell an operator that Postiz is reachable when it was never configured.
+ */
+interface Skipped {
+  skipped: string;
+}
+
+type CheckResult = string | Skipped | null;
+
+function skip(reason: string): Skipped {
+  return { skipped: reason };
+}
+
+// Display name only — every other fact about an adapter (how it's probed,
+// what counts as healthy) lives in the adapter's own health(), not here.
+const ADAPTER_LABELS: Partial<Record<ChannelId, string>> = {
+  postiz: "Postiz",
+  openoutreach: "OpenOutreach",
+};
+
+function labelFor(id: ChannelId): string {
+  return ADAPTER_LABELS[id] ?? id;
+}
+
+const checks: Array<{ name: string; run: () => Promise<CheckResult> }> = [
   {
     name: "Postgres reachable",
     run: async () => {
@@ -60,20 +91,78 @@ const checks: Array<{ name: string; run: () => Promise<string | null> }> = [
   },
 ];
 
-let failed = 0;
-for (const check of checks) {
-  const problem = await check.run();
-  if (problem) {
-    failed++;
-    console.log(`  FAIL  ${check.name}\n        ${problem}`);
-  } else {
-    console.log(`  ok    ${check.name}`);
+// Integration checks come from the registry itself rather than a bespoke
+// probe per integration. preflight used to re-implement "is Postiz reachable"
+// and "is the OpenOutreach export dir usable" on its own, and that copy
+// disagreed with the adapters' own health() — different endpoints, different
+// pass/fail thresholds. Asking the registry means there is exactly one
+// implementation of "is this integration healthy," and preflight and the
+// running system always agree on the answer.
+//
+// Building the registry and collecting its reports is wrapped because preflight
+// is the tool an operator reaches for when something is already wrong. A bug in
+// an adapter's constructor must not answer that with a stack trace and no check
+// list: the Postgres and gateway results are exactly what the operator came for,
+// and they are still worth printing when an integration cannot even be built.
+try {
+  const registry = buildRegistry(process.env);
+
+  for (const unavailable of registry.unavailable) {
+    checks.push({
+      name: `${labelFor(unavailable.id)} reachable`,
+      run: async () => skip(unavailable.reason),
+    });
   }
+
+  // One registry.health() call covers every available adapter, including the
+  // per-adapter timeout the registry itself enforces — preflight does not
+  // re-implement that, either.
+  const healthReports = await registry.health();
+
+  for (const { id, report } of healthReports) {
+    checks.push({
+      name: `${labelFor(id)} reachable`,
+      run: async () => (report.reachable ? null : report.detail),
+    });
+  }
+} catch (e) {
+  const detail = e instanceof Error ? e.message : String(e);
+  checks.push({
+    name: "Integrations",
+    run: async () =>
+      `Could not inspect the configured integrations: ${detail}. ` +
+      `The checks above are still accurate; this is a defect in an adapter, not in your setup.`,
+  });
 }
+
+let failed = 0;
+let skipped = 0;
+
+for (const check of checks) {
+  const result = await check.run();
+
+  if (result === null) {
+    console.log(`  ok    ${check.name}`);
+    continue;
+  }
+
+  if (typeof result === "object") {
+    skipped++;
+    console.log(`  skip  ${check.name}\n        ${result.skipped}`);
+    continue;
+  }
+
+  failed++;
+  console.log(`  FAIL  ${check.name}\n        ${result}`);
+}
+
+const tail = skipped > 0 ? ` ${skipped} optional integration(s) not configured.` : "";
 
 console.log(
   failed === 0
-    ? "\nPreflight passed. Start with: pnpm dev"
-    : `\n${failed} check(s) need attention before the loop will run.`,
+    ? `\nPreflight passed. Start with: pnpm dev${tail}`
+    : `\n${failed} check(s) need attention before the loop will run.${tail}`,
 );
+
+// Skips never fail the run; an unconfigured optional integration is a choice.
 process.exit(failed === 0 ? 0 : 1);
