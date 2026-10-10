@@ -1,9 +1,18 @@
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AdapterConfigError } from "../types";
-import { configFromEnv, createOpenOutreachAdapter, parseLeads } from "./openoutreach";
+import { UnterminatedQuoteError } from "./csv";
+import { MAX_CSV_BYTES, configFromEnv, createOpenOutreachAdapter, parseLeads } from "./openoutreach";
 
 let dir: string;
 
@@ -12,6 +21,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // A permission test below strips the directory's own read/execute bits to
+  // prove the health check actually needs them; restore them first or the
+  // recursive remove can't even list what it's deleting.
+  chmodSync(dir, 0o700);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -110,6 +123,36 @@ describe("parseLeads", () => {
     expect(leads).toHaveLength(1);
     expect(leads[0]?.name).toBe("Jane Doe");
   });
+
+  it("recognizes a UTF-8 BOM on the header row (relies on normalizeHeader's trim())", () => {
+    // trim() is what strips the leading U+FEFF here; this is pinned
+    // deliberately so that reliance is never accidentally removed by a
+    // change that looks like a no-op (e.g. swapping trim() for a
+    // hand-rolled whitespace strip that doesn't also strip U+FEFF).
+    const csv = "﻿name,email\nJane Doe,jane@acme.com\n";
+    const leads = parseLeads(csv, 10);
+    expect(leads).toHaveLength(1);
+    expect(leads[0]?.name).toBe("Jane Doe");
+    expect(leads[0]?.email).toBe("jane@acme.com");
+  });
+
+  it("returns no leads when limit is zero", () => {
+    const csv = "name\nJane Doe\n";
+    expect(parseLeads(csv, 0)).toEqual([]);
+  });
+
+  it("returns no leads when limit is negative", () => {
+    const csv = "name\nJane Doe\n";
+    expect(parseLeads(csv, -1)).toEqual([]);
+  });
+
+  it("throws rather than importing a truncated export with an unterminated quote", () => {
+    // F5 repro: OpenOutreach killed mid-write leaves a dangling quote. The
+    // pre-fix behavior silently imported {name: "Jane,Acme", company: null}
+    // instead of reporting the file as broken.
+    const csv = 'name,company\n"Jane,Acme';
+    expect(() => parseLeads(csv, 10)).toThrow(UnterminatedQuoteError);
+  });
 });
 
 describe("createOpenOutreachAdapter", () => {
@@ -148,7 +191,12 @@ describe("createOpenOutreachAdapter", () => {
     const adapter = createOpenOutreachAdapter({ exportDir: dir });
     const health = await adapter.health();
     expect(health.reachable).toBe(false);
-    expect(health.detail).toContain("export");
+    // F8: this used to assert `toContain("export")`, which also matches the
+    // missing-directory message (it contains "exported") and so could not
+    // tell the two failure branches apart. This substring is unique to the
+    // "directory exists but is empty" branch.
+    expect(health.detail).toContain("no .csv files");
+    expect(health.detail).not.toContain("OPENOUTREACH_EXPORT_DIR");
   });
 
   it("reports reachable once at least one CSV is present", async () => {
@@ -156,5 +204,105 @@ describe("createOpenOutreachAdapter", () => {
     const adapter = createOpenOutreachAdapter({ exportDir: dir });
     const health = await adapter.health();
     expect(health.reachable).toBe(true);
+  });
+
+  it("reports unreachable (not rejected) when the export directory is unreadable (R_OK, not just F_OK)", async () => {
+    writeCsv("leads.csv", "name\nJane Doe\n");
+    const unreadable = join(dir, "locked");
+    await mkdir(unreadable);
+    chmodSync(unreadable, 0o000);
+
+    const adapter = createOpenOutreachAdapter({ exportDir: unreadable });
+    await expect(adapter.health()).resolves.toEqual(
+      expect.objectContaining({ reachable: false }),
+    );
+
+    // Restore so afterEach's recursive rm of the parent `dir` can descend
+    // into it.
+    chmodSync(unreadable, 0o700);
+  });
+
+  describe("F1/F2: filesystem entries that are not plain files", () => {
+    it("health() does not reject when the directory contains a dangling symlink", async () => {
+      symlinkSync(join(dir, "nowhere"), join(dir, "link.csv"));
+      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      await expect(adapter.health()).resolves.toEqual(
+        expect.objectContaining({ reachable: false }),
+      );
+    });
+
+    it("fetchLeads() does not reject when the directory contains a dangling symlink", async () => {
+      symlinkSync(join(dir, "nowhere"), join(dir, "link.csv"));
+      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      await expect(adapter.fetchLeads?.(10)).resolves.toEqual([]);
+    });
+
+    it("fetchLeads() does not reject when a subdirectory is named *.csv, and ignores it", async () => {
+      await mkdir(join(dir, "archive.csv"));
+      writeCsv("real.csv", "name\nJane Doe\n");
+      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      const leads = await adapter.fetchLeads?.(10);
+      expect(leads).toHaveLength(1);
+      expect(leads?.[0]?.name).toBe("Jane Doe");
+    });
+
+    it("does not follow a symlink pointing at a real CSV outside the export directory", async () => {
+      // The export directory is written by a separate process; a symlink
+      // inside it pointing elsewhere must not be treated as an export, even
+      // when its target is a perfectly valid CSV.
+      const outside = mkdtempSync(join(tmpdir(), "openoutreach-outside-"));
+      try {
+        const target = join(outside, "secret.csv");
+        writeFileSync(target, "name\nShould Not Appear\n");
+        symlinkSync(target, join(dir, "evil.csv"));
+
+        const adapter = createOpenOutreachAdapter({ exportDir: dir });
+        const leads = await adapter.fetchLeads?.(10);
+        expect(leads).toEqual([]);
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("F3: deterministic mtime tie-break", () => {
+    it("picks the lexicographically last filename when mtimes are identical", async () => {
+      const tie = new Date("2024-06-01T00:00:00Z");
+      // Written out of alphabetical order on purpose, so a pass only because
+      // readdir happened to return names sorted would not go undetected.
+      writeCsv("bbb.csv", "name\nBbb\n", tie);
+      writeCsv("aaa.csv", "name\nAaa\n", tie);
+      writeCsv("ccc.csv", "name\nCcc\n", tie);
+
+      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      const leads = await adapter.fetchLeads?.(10);
+      expect(leads?.[0]?.name).toBe("Ccc");
+    });
+  });
+
+  describe("F4: oversized export is refused unread", () => {
+    it("returns no leads when the latest CSV exceeds the size cap", async () => {
+      const oversized = join(dir, "huge.csv");
+      writeFileSync(oversized, Buffer.alloc(MAX_CSV_BYTES + 1, "a".charCodeAt(0)));
+
+      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      const leads = await adapter.fetchLeads?.(10);
+      expect(leads).toEqual([]);
+    });
+
+    it("still reads a CSV at or under the size cap", async () => {
+      writeCsv("ok.csv", "name\nJane Doe\n");
+      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      const leads = await adapter.fetchLeads?.(10);
+      expect(leads).toHaveLength(1);
+    });
+  });
+
+  describe("F5: truncated export on disk", () => {
+    it("fetchLeads() returns no leads (not a rejection) for a file with an unterminated quote", async () => {
+      writeCsv("truncated.csv", 'name,company\n"Jane,Acme');
+      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      await expect(adapter.fetchLeads?.(10)).resolves.toEqual([]);
+    });
   });
 });

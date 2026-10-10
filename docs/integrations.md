@@ -30,7 +30,7 @@ Three reasons drove this, not one:
 
 | Integration | Covers | License | How we talk to it | Without it |
 |---|---|---|---|---|
-| [Postiz](https://github.com/gitroomhq/postiz-app) | Social publishing and scheduling | AGPL-3.0 | HTTP, `{POSTIZ_URL}/public/v1`, API-key auth, `POST /public/v1/posts` to create a post. Self-hosted rate limit is 90 requests/hour. | `postiz.publish` and any action routed through the `postiz` adapter are unavailable. Nothing else in Loop Engine is affected. |
+| [Postiz](https://github.com/gitroomhq/postiz-app) | Social publishing and scheduling | AGPL-3.0 | HTTP, `{POSTIZ_URL}/public/v1`, API-key auth, `POST /public/v1/posts` to create a post. Self-hosted rate limit is 90 requests/hour. | `linkedin.post` is unavailable. Nothing else in Loop Engine is affected. |
 | [OpenOutreach](https://github.com/eracle/OpenOutreach) | ICP-driven B2B lead discovery | GPL-3.0 | Run as its own process; Loop Engine reads the CSV it exports to `OPENOUTREACH_EXPORT_DIR`. No API call, no shared process, no shared database. | Lead import from OpenOutreach is unavailable. Leads can still be added by hand or through any other inbound adapter. |
 
 ### Deliberately not integrated
@@ -88,8 +88,34 @@ To add an adapter:
 3. Make every required setting an environment variable, documented in `.env.example` the same way
    `POSTIZ_URL`/`POSTIZ_API_KEY`/`OPENOUTREACH_EXPORT_DIR` are: what it's for, that it's optional,
    and what happens when it's unset.
-4. Add a `pnpm preflight` check following the pattern in `scripts/preflight.ts`: skip cleanly and
-   report "not configured" when the env var is absent, fail with the exact fix command only when
-   configured but unreachable. An unconfigured optional integration is never a preflight failure.
+4. Nothing to do for `pnpm preflight` itself: it builds a `Registry` via `buildRegistry` and
+   renders one check per adapter straight from it, so a correctly implemented `health()` is
+   enough. Register the adapter's factory in `FACTORIES` in `src/lib/channels/registry.ts` and the
+   new check appears automatically — skipped when the adapter's config is absent, failed with its
+   `health()` detail when configured but unreachable. See
+   [Preflight asks the registry, not the integration](#preflight-asks-the-registry-not-the-integration)
+   below.
 5. Add a row to the integrations table above, and to the Prior art table in `README.md` if the
    integration is itself an open-source project.
+
+## Preflight asks the registry, not the integration
+
+`pnpm preflight` does not probe Postiz or the OpenOutreach export directory on its own. It calls
+`buildRegistry(process.env)` and renders exactly what the registry reports: a `skip` for each
+adapter in `registry.unavailable`, using the reason the adapter's own `configFromEnv` raised, and
+an `ok` or `FAIL` for each adapter in `registry.available`, from the `HealthReport` its `health()`
+returned.
+
+This used to be two separate implementations of "is Postiz reachable" — one in the adapter, one
+inlined in `scripts/preflight.ts` — and they disagreed. The script checked a different endpoint
+than the adapter did, handled a trailing slash on `POSTIZ_URL` differently, and treated an
+unrecognized non-5xx response as healthy where the adapter treated it as unreachable. An operator
+running preflight against the same Postiz instance the app was about to use could get told
+"reachable" by one check and "unreachable" by the other, with no way to tell which one was right.
+The OpenOutreach check had the same problem in the other direction: preflight passed on a directory
+that existed but held no CSVs, which the adapter's own `health()` correctly refuses, so preflight
+could report success while `fetchLeads` returned nothing, indefinitely.
+
+There is now exactly one implementation of "is this integration healthy" per adapter — the
+adapter's own `health()` — and both preflight and the running app read it. They cannot drift apart
+because there is nothing left to drift: the second implementation was deleted, not synchronized.

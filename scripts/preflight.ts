@@ -4,6 +4,9 @@
  */
 export {};
 
+import { buildRegistry } from "../src/lib/channels/registry";
+import type { ChannelId } from "../src/lib/channels/types";
+
 /**
  * A check reports one of three outcomes, and the distinction matters to the
  * reader: null means it passed, a Skipped means the integration is not
@@ -19,6 +22,17 @@ type CheckResult = string | Skipped | null;
 
 function skip(reason: string): Skipped {
   return { skipped: reason };
+}
+
+// Display name only — every other fact about an adapter (how it's probed,
+// what counts as healthy) lives in the adapter's own health(), not here.
+const ADAPTER_LABELS: Partial<Record<ChannelId, string>> = {
+  postiz: "Postiz",
+  openoutreach: "OpenOutreach",
+};
+
+function labelFor(id: ChannelId): string {
+  return ADAPTER_LABELS[id] ?? id;
 }
 
 const checks: Array<{ name: string; run: () => Promise<CheckResult> }> = [
@@ -75,51 +89,35 @@ const checks: Array<{ name: string; run: () => Promise<CheckResult> }> = [
         ? "The kill switch is ON, so nothing will send. Set LOOP_KILL_SWITCH=false when ready."
         : null,
   },
-  {
-    name: "Postiz reachable",
-    run: async () => {
-      const url = process.env.POSTIZ_URL;
-      const key = process.env.POSTIZ_API_KEY;
-      if (!url || !key) {
-        return skip("POSTIZ_URL or POSTIZ_API_KEY is unset, so publishing is unavailable.");
-      }
-      try {
-        const res = await fetch(`${url}/public/v1/posts`, {
-          headers: { Authorization: key },
-          signal: AbortSignal.timeout(3000),
-        });
-        // A rejected key is a configuration failure, not a healthy instance:
-        // reporting it as reachable would hide the one problem this check
-        // exists to catch. Other 4xx responses mean the endpoint answered,
-        // which is all this check needs to prove.
-        if (res.status === 401 || res.status === 403) {
-          return `Postiz at ${url} rejected the API key (${res.status}). Generate a new one in Postiz under Settings -> Public API and update POSTIZ_API_KEY.`;
-        }
-        return res.status >= 500
-          ? `Postiz at ${url} returned ${res.status}. Run: docker compose up -d postiz`
-          : null;
-      } catch (e) {
-        return `Cannot reach Postiz at ${url}. Run: docker compose up -d postiz (${(e as Error).message})`;
-      }
-    },
-  },
-  {
-    name: "OpenOutreach export directory",
-    run: async () => {
-      const dir = process.env.OPENOUTREACH_EXPORT_DIR;
-      if (!dir) {
-        return skip("OPENOUTREACH_EXPORT_DIR is unset, so lead import is unavailable.");
-      }
-      const { access } = await import("node:fs/promises");
-      try {
-        await access(dir);
-        return null;
-      } catch {
-        return `OPENOUTREACH_EXPORT_DIR is set to ${dir}, which does not exist. Run: mkdir -p ${dir}`;
-      }
-    },
-  },
 ];
+
+// Integration checks come from the registry itself rather than a bespoke
+// probe per integration. preflight used to re-implement "is Postiz reachable"
+// and "is the OpenOutreach export dir usable" on its own, and that copy
+// disagreed with the adapters' own health() — different endpoints, different
+// pass/fail thresholds. Asking the registry means there is exactly one
+// implementation of "is this integration healthy," and preflight and the
+// running system always agree on the answer.
+const registry = buildRegistry(process.env);
+
+for (const unavailable of registry.unavailable) {
+  checks.push({
+    name: `${labelFor(unavailable.id)} reachable`,
+    run: async () => skip(unavailable.reason),
+  });
+}
+
+// One registry.health() call covers every available adapter, including the
+// per-adapter timeout the registry itself enforces — preflight does not
+// re-implement that, either.
+const healthReports = await registry.health();
+
+for (const { id, report } of healthReports) {
+  checks.push({
+    name: `${labelFor(id)} reachable`,
+    run: async () => (report.reachable ? null : report.detail),
+  });
+}
 
 let failed = 0;
 let skipped = 0;

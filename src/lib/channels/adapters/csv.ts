@@ -11,11 +11,38 @@
 
 export type CsvRow = string[];
 
+/**
+ * Thrown when the input ends while a quoted field is still open. Real-world
+ * cause is a truncated export (OpenOutreach's writer process was killed or
+ * crashed mid-write), not valid CSV with an unusual shape. Callers should
+ * treat this as "the file is unusable" rather than take whatever `parseCsv`
+ * managed to build before the end of input — importing a field that silently
+ * swallowed the rest of the file is worse than reporting nothing.
+ */
+export class UnterminatedQuoteError extends Error {
+  constructor() {
+    super("CSV input ended while a quoted field was still open; the file appears truncated.");
+    this.name = "UnterminatedQuoteError";
+  }
+}
+
 export function parseCsv(input: string): CsvRow[] {
   const rows: CsvRow[] = [];
   let row: string[] = [];
   let field = "";
   let inQuotes = false;
+  // True once any character has been consumed for the field currently being
+  // built, including a quote. RFC 4180 only lets a quote open a quoted
+  // section when it is the first character of a field; a quote that shows up
+  // after other characters is just a literal character in an unquoted field
+  // (e.g. `ab"c,d"e` is the two fields `ab"c` and `d"e`, not one field that
+  // merges across the comma).
+  let fieldStarted = false;
+  // Tracks whether the current field was opened with a quote, independently
+  // of `field.length`. That distinction is what lets a quoted-empty field
+  // (`""`) be told apart from "no field was written on this line at all" when
+  // deciding whether to flush a trailing row at end of input.
+  let fieldWasQuoted = false;
   let sawAnyFieldOnLine = false;
   let i = 0;
   const len = input.length;
@@ -23,6 +50,8 @@ export function parseCsv(input: string): CsvRow[] {
   const endField = (): void => {
     row.push(field);
     field = "";
+    fieldStarted = false;
+    fieldWasQuoted = false;
     sawAnyFieldOnLine = true;
   };
   const endRow = (): void => {
@@ -53,8 +82,10 @@ export function parseCsv(input: string): CsvRow[] {
       continue;
     }
 
-    if (ch === '"') {
+    if (ch === '"' && !fieldStarted) {
       inQuotes = true;
+      fieldStarted = true;
+      fieldWasQuoted = true;
       i += 1;
       continue;
     }
@@ -64,7 +95,13 @@ export function parseCsv(input: string): CsvRow[] {
       continue;
     }
     if (ch === "\r") {
-      // Treat CRLF as one line ending rather than an empty row plus a blank line.
+      // Treat CRLF as one line ending rather than an empty row plus a blank
+      // line. A lone \r with no following \n (old Mac OS 9-style line
+      // endings) still ends the row here too: this is a deliberate departure
+      // from strict RFC 4180, which does not define bare-\r line endings at
+      // all, but it is the more useful behavior for a format whose only
+      // published producer is OpenOutreach's own CSV writer, and it costs
+      // nothing for the CRLF/LF files that actually show up.
       if (input.charAt(i + 1) === "\n") {
         i += 1;
       }
@@ -78,13 +115,21 @@ export function parseCsv(input: string): CsvRow[] {
       continue;
     }
     field += ch;
+    fieldStarted = true;
     i += 1;
+  }
+
+  if (inQuotes) {
+    throw new UnterminatedQuoteError();
   }
 
   // Without a trailing newline, the last field and row are still pending and
   // need to be flushed. With one, there is nothing left to do — flushing
-  // again here would append a spurious empty row.
-  if (field.length > 0 || sawAnyFieldOnLine || row.length > 0) {
+  // again here would append a spurious empty row. `fieldWasQuoted` matters
+  // here too: a trailing `""` with no newline after it has `field.length ===
+  // 0`, but it is a real (empty) field that was explicitly written, not the
+  // absence of one, so it must still be flushed.
+  if (field.length > 0 || fieldWasQuoted || sawAnyFieldOnLine || row.length > 0) {
     endRow();
   }
 

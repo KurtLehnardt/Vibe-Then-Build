@@ -13,6 +13,7 @@
  * exactly this reason.
  */
 import { constants as fsConstants } from "node:fs";
+import type { Dirent } from "node:fs";
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type {
@@ -136,29 +137,66 @@ export function parseLeads(csvText: string, limit: number): InboundLead[] {
   return leads;
 }
 
-/** Returns the full path of the most recently modified .csv in `dir`, or null. */
+// A lead export is a small structured table: even a generous export of tens
+// of thousands of rows lands well under a few MB. 64 MiB leaves a wide
+// margin for an unusually verbose export while staying far short of what
+// would stress Node's string/array heap when the whole file is read into
+// memory at once. If OpenOutreach exports ever legitimately grow past this,
+// the real fix is a streaming parser, not raising this number.
+export const MAX_CSV_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Returns the full path of the most recently modified .csv in `dir`, or null
+ * if none exists or the directory can't be read.
+ *
+ * Only considers entries `readdir` itself reports as regular files. That is
+ * doing real security and correctness work, not just tidiness:
+ * `withFileTypes` + `d.isFile()` is false for a symlink entry (so a dangling
+ * symlink never reaches `stat`, and a symlink pointing outside `dir` is never
+ * read as a lead export) and false for a subdirectory that happens to be
+ * named `*.csv` (so it never reaches `readFile` and throws EISDIR). `dir` is
+ * written by a separate process, so both are real, not hypothetical.
+ */
 async function mostRecentCsv(dir: string): Promise<string | null> {
-  let entries: string[];
+  let entries: Dirent[];
   try {
-    entries = await readdir(dir);
+    entries = await readdir(dir, { withFileTypes: true });
   } catch {
     return null;
   }
 
-  const csvNames = entries.filter((n) => n.toLowerCase().endsWith(".csv"));
-  if (csvNames.length === 0) return null;
+  const csvFiles = entries.filter((d) => d.isFile() && d.name.toLowerCase().endsWith(".csv"));
+  if (csvFiles.length === 0) return null;
 
-  let newestPath: string | null = null;
+  let newestName: string | null = null;
   let newestMtimeMs = -Infinity;
-  for (const name of csvNames) {
-    const full = join(dir, name);
-    const info = await stat(full);
-    if (info.mtimeMs > newestMtimeMs) {
+  for (const d of csvFiles) {
+    const full = join(dir, d.name);
+    let info: Awaited<ReturnType<typeof stat>>;
+    try {
+      info = await stat(full);
+    } catch {
+      // The entry existed when readdir ran but is gone or unreadable now
+      // (e.g. a race with the writer process). Skip it rather than letting
+      // the rejection escape — health() and fetchLeads() both promise never
+      // to reject for a filesystem reason.
+      continue;
+    }
+    if (
+      info.mtimeMs > newestMtimeMs ||
+      // Two OpenOutreach exports can land within the same filesystem-clock
+      // tick. readdir's name order is not guaranteed across platforms (APFS
+      // happens to return names sorted; ext4 does not), so without an
+      // explicit tie-break, "the latest file" for the exact same directory
+      // would differ by host. Filename descending is an arbitrary rule, but
+      // it is a deterministic one, which is the property that matters.
+      (info.mtimeMs === newestMtimeMs && newestName !== null && d.name > newestName)
+    ) {
       newestMtimeMs = info.mtimeMs;
-      newestPath = full;
+      newestName = d.name;
     }
   }
-  return newestPath;
+  return newestName === null ? null : join(dir, newestName);
 }
 
 export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelAdapter {
@@ -198,8 +236,45 @@ export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelA
       const latest = await mostRecentCsv(cfg.exportDir);
       if (latest === null) return [];
 
-      const text = await readFile(latest, "utf-8");
-      return parseLeads(text, limit);
+      let info: Awaited<ReturnType<typeof stat>>;
+      try {
+        info = await stat(latest);
+      } catch {
+        // Selected by mostRecentCsv a moment ago but gone now. Nothing to
+        // read this round.
+        return [];
+      }
+
+      if (info.size > MAX_CSV_BYTES) {
+        // `limit` only bounds how many leads come *out*; parseCsv still has
+        // to materialize the entire row matrix to get there, and readFile
+        // would have to hold the whole file as a string first. A file left
+        // over this cap is refused unread rather than risking an OOM of the
+        // Next.js process. A streaming parser would read arbitrarily large
+        // exports safely; that is more machinery than this adapter needs
+        // until an export actually gets this big.
+        return [];
+      }
+
+      let text: string;
+      try {
+        text = await readFile(latest, "utf-8");
+      } catch {
+        // Permissions changed or the file was removed since stat(). An
+        // empty list is the documented "nothing to report this round"
+        // state; fetchLeads must not reject for a filesystem reason.
+        return [];
+      }
+
+      try {
+        return parseLeads(text, limit);
+      } catch {
+        // parseCsv throws when the file ends inside a quoted field — a
+        // truncated export. Importing whatever partial data it produced
+        // before hitting the end would be worse than reporting none, so
+        // this is treated the same as "no usable export this round."
+        return [];
+      }
     },
   };
 }

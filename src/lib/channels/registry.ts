@@ -70,20 +70,76 @@ export class AmbiguousAdapterError extends Error {
 }
 
 export class UnknownAdapterError extends Error {
-  constructor(actionType: ActionType, requested: string, known: ChannelId[]) {
+  constructor(actionType: ActionType, requested: string, available: ChannelId[]) {
     super(
       `${overrideVarFor(actionType)} is set to "${requested}", which is not an available adapter. ` +
-        `Available: ${known.join(", ") || "none"}.`,
+        `Available: ${available.join(", ") || "none"}.`,
     );
     this.name = "UnknownAdapterError";
   }
 }
 
-export function buildRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
+/**
+ * Distinct from UnknownAdapterError on purpose. An operator who pins a real,
+ * configured adapter to an action it cannot carry needs to be told that, not
+ * told the adapter does not exist — the previous single error sent them to fix
+ * the wrong thing.
+ */
+export class IncompatibleAdapterError extends Error {
+  constructor(actionType: ActionType, requested: ChannelId, capable: ChannelId[]) {
+    super(
+      `${overrideVarFor(actionType)} is set to "${requested}", which is configured but cannot ` +
+        `carry "${actionType}". Adapters that can: ${capable.join(", ") || "none"}.`,
+    );
+    this.name = "IncompatibleAdapterError";
+  }
+}
+
+/**
+ * Longest a single adapter may take to report health before the registry gives
+ * up on it. The Postiz adapter bounds its own HTTP call, but filesystem calls
+ * have no inherent timeout, so one hung network mount would otherwise hang the
+ * whole health check.
+ */
+const HEALTH_TIMEOUT_MS = 10_000;
+
+/** Converts anything an adapter's health call can do into a report. */
+async function reportFor(adapter: ChannelAdapter): Promise<HealthReport> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      adapter.health(),
+      new Promise<HealthReport>((resolve) => {
+        timer = setTimeout(
+          () =>
+            resolve({
+              reachable: false,
+              detail: `The ${adapter.id} adapter did not report health within ${HEALTH_TIMEOUT_MS / 1000} seconds.`,
+            }),
+          HEALTH_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } catch (e) {
+    // An adapter that throws from health() is a defect in that adapter, but it
+    // must not take the other adapters' reports down with it.
+    return {
+      reachable: false,
+      detail: `The ${adapter.id} adapter failed while reporting health: ${(e as Error).message}`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function buildRegistry(
+  env: NodeJS.ProcessEnv = process.env,
+  factories: Partial<Record<ChannelId, AdapterFactory>> = FACTORIES,
+): Registry {
   const available: ChannelAdapter[] = [];
   const unavailable: Unavailable[] = [];
 
-  for (const [id, factory] of Object.entries(FACTORIES) as Array<[ChannelId, AdapterFactory]>) {
+  for (const [id, factory] of Object.entries(factories) as Array<[ChannelId, AdapterFactory]>) {
     try {
       available.push(factory(env));
     } catch (e) {
@@ -108,17 +164,24 @@ export function buildRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
 
       const pinned = env[overrideVarFor(actionType)];
       if (pinned) {
-        const match = candidates.find((a) => a.id === pinned);
-        if (!match) {
-          // An explicit instruction that cannot be honored is loud, never a
-          // silent fallback: the operator asked for a specific destination.
-          throw new UnknownAdapterError(
+        // An explicit instruction that cannot be honored is loud, never a
+        // silent fallback: the operator asked for a specific destination.
+        const capable = candidates.find((a) => a.id === pinned);
+        if (capable) return capable;
+
+        const configured = available.find((a) => a.id === pinned);
+        if (configured) {
+          throw new IncompatibleAdapterError(
             actionType,
-            pinned,
+            configured.id,
             candidates.map((a) => a.id),
           );
         }
-        return match;
+        throw new UnknownAdapterError(
+          actionType,
+          pinned,
+          available.map((a) => a.id),
+        );
       }
 
       if (candidates.length === 0) return null;
@@ -138,8 +201,9 @@ export function buildRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
     },
 
     async health() {
+      // Every adapter is reported on, even when another one throws or hangs.
       return Promise.all(
-        available.map(async (a) => ({ id: a.id, report: await a.health() })),
+        available.map(async (a) => ({ id: a.id, report: await reportFor(a) })),
       );
     },
   };
