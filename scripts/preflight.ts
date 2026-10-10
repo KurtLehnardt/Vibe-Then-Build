@@ -35,6 +35,15 @@ function labelFor(id: ChannelId): string {
   return ADAPTER_LABELS[id] ?? id;
 }
 
+// Ollama's own convention: a tag with no colon means ":latest". Applying that
+// to both sides before comparing means a bare "qwen3" in config matches a
+// pulled "qwen3:latest", but "qwen3:14b" matches only that exact tag — a
+// pulled "qwen3:4b" must not satisfy it, since startsWith() on the name
+// before the colon used to let it.
+function withTag(name: string): string {
+  return name.includes(":") ? name : `${name}:latest`;
+}
+
 const checks: Array<{ name: string; run: () => Promise<CheckResult> }> = [
   {
     name: "Postgres reachable",
@@ -75,7 +84,8 @@ const checks: Array<{ name: string; run: () => Promise<CheckResult> }> = [
         });
         if (!res.ok) return `Ollama returned ${res.status}.`;
         const body = (await res.json()) as { models?: Array<{ name: string }> };
-        const have = (body.models ?? []).some((m) => m.name.startsWith(model.split(":")[0]!));
+        const wanted = withTag(model);
+        const have = (body.models ?? []).some((m) => withTag(m.name) === wanted);
         return have ? null : `Model ${model} is not pulled. Run: ollama pull ${model}`;
       } catch {
         return "Ollama is not reachable on :11434. Run: docker compose up -d ollama";

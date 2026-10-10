@@ -26,6 +26,22 @@ export function costUsd(tokensIn: number, tokensOut: number, rate: Rate): number
 }
 
 export function rateFor(provider: "ollama" | "anthropic", rates: Record<string, Rate>): Rate {
+  // Ollama alone is legitimately zero: local inference has no metered price,
+  // because no money leaves the account for it. That is a fact about the
+  // provider, not a missing configuration, so it is never allowed to throw.
   if (provider === "ollama") return LOCAL_RATE;
-  return rates[provider] ?? LOCAL_RATE;
+
+  const rate = rates[provider];
+  if (!rate) {
+    // Any other provider is a paid one. Silently pricing it at zero would be
+    // the stale-rate failure this file's own rates comment warns about, only
+    // worse: every call through this provider would under-report cost and
+    // corrupt the margin report until someone noticed by accident. Fail loudly
+    // instead, naming the provider, so a rate is configured before the first
+    // call is costed rather than after the margin report is already wrong.
+    throw new Error(
+      `No rate configured for provider "${provider}". A rate must be configured before its cost can be reported.`,
+    );
+  }
+  return rate;
 }

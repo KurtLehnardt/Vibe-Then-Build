@@ -50,21 +50,50 @@ export interface Evaluation {
   clamped: boolean;
 }
 
+export interface LevelResolution {
+  /** The requested level, with invalid input (non-integer or out of 0-3) coerced to draft-only. */
+  requested: Level;
+  /** The level actually in force, after clamping the (coerced) request to the action's ceiling. */
+  effectiveLevel: Level;
+  /** True when the ceiling reduced the coerced requested level. */
+  clamped: boolean;
+}
+
+/**
+ * Resolves the level actually in force for an action. This is the one
+ * implementation of "clamp the requested level to its ceiling" in the
+ * codebase — the settings page and this engine both call it, rather than
+ * each re-implementing `Math.min(requested, ceiling)` and risking disagreeing
+ * on how an invalid level is handled. An invalid requested level (not an
+ * integer 0-3) is coerced to draft-only rather than guessed at, exactly as
+ * an unparseable autonomy setting should be treated: refuse to send rather
+ * than pick a level nobody asked for.
+ */
+export function resolveLevel(requestedLevel: number, actionType: ActionType): LevelResolution {
+  const spec = ACTION_DEFAULTS[actionType];
+  const requested = isLevel(requestedLevel) ? requestedLevel : LEVEL.DRAFT_ONLY;
+  const effectiveLevel = Math.min(requested, spec.ceiling) as Level;
+  return { requested, effectiveLevel, clamped: effectiveLevel < requested };
+}
+
 /**
  * The single gate every outbound action passes through.
  *
  * Checks run in order of severity so the recorded reason names the most
- * serious cause rather than the first one encountered: kill switch, then
- * channel disabled, suppression, quiet hours, daily cap, ICP floor.
+ * serious cause rather than the first one encountered: kill switch, channel
+ * disabled, suppression, draft-only level, ICP floor, then the two
+ * deferrals (quiet hours, daily cap). The ICP floor runs ahead of the
+ * deferrals because a floor failure is permanent — the lead will never pass
+ * it — while quiet hours and a met daily cap both clear on their own. Reporting
+ * a permanent block as a deferral would have the caller retry a lead forever
+ * that can never go out.
  *
  * A "deferred" decision means the action is permitted but not right now —
  * the caller should reschedule rather than drop it. "blocked" means drop.
  */
 export function evaluate(input: EvaluateInput): Evaluation {
   const spec = ACTION_DEFAULTS[input.actionType];
-  const requested = isLevel(input.policy.level) ? input.policy.level : LEVEL.DRAFT_ONLY;
-  const effectiveLevel = (Math.min(requested, spec.ceiling) as Level);
-  const clamped = effectiveLevel < requested;
+  const { requested, effectiveLevel, clamped } = resolveLevel(input.policy.level, input.actionType);
   const approval = approvalFor(effectiveLevel);
 
   const base = { effectiveLevel, approval, clamped };
@@ -95,22 +124,12 @@ export function evaluate(input: EvaluateInput): Evaluation {
     };
   }
 
-  if (inQuietHours(input.localHour, input.policy.quietHoursStart, input.policy.quietHoursEnd)) {
-    return {
-      ...base,
-      decision: "deferred",
-      reason: `Quiet hours are in effect at local hour ${input.localHour}.`,
-    };
-  }
-
-  if (input.policy.dailyCap !== null && input.sentToday >= input.policy.dailyCap) {
-    return {
-      ...base,
-      decision: "deferred",
-      reason: `Daily cap of ${input.policy.dailyCap} for ${input.actionType} is already met.`,
-    };
-  }
-
+  // The ICP floor is checked ahead of quiet hours and the daily cap even
+  // though those two are written first in the day's events, because a floor
+  // failure is a block, not a deferral: this target will never clear the
+  // floor on its own. Quiet hours and a met cap are both deferrals that
+  // clear with time. Checking the deferrals first would report a
+  // permanently ineligible lead as "try again later" and retry it forever.
   if (
     input.policy.minIcpScore !== null &&
     (input.leadIcpScore === null || input.leadIcpScore === undefined)
@@ -132,6 +151,22 @@ export function evaluate(input: EvaluateInput): Evaluation {
       ...base,
       decision: "blocked",
       reason: `ICP score ${input.leadIcpScore} is below the floor of ${input.policy.minIcpScore}.`,
+    };
+  }
+
+  if (inQuietHours(input.localHour, input.policy.quietHoursStart, input.policy.quietHoursEnd)) {
+    return {
+      ...base,
+      decision: "deferred",
+      reason: `Quiet hours are in effect at local hour ${input.localHour}.`,
+    };
+  }
+
+  if (input.policy.dailyCap !== null && input.sentToday >= input.policy.dailyCap) {
+    return {
+      ...base,
+      decision: "deferred",
+      reason: `Daily cap of ${input.policy.dailyCap} for ${input.actionType} is already met.`,
     };
   }
 

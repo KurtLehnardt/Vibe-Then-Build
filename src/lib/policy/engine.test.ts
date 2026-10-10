@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ACTION_DEFAULTS } from "./defaults";
-import { defaultPolicyFor, evaluate, inQuietHours, type OperatorPolicy } from "./engine";
+import { defaultPolicyFor, evaluate, inQuietHours, resolveLevel, type OperatorPolicy } from "./engine";
 import { ACTION_TYPES, LEVEL } from "./levels";
 
 function policy(over: Partial<OperatorPolicy> = {}): OperatorPolicy {
@@ -156,6 +156,38 @@ describe("ICP floor", () => {
       leadIcpScore: 70,
     });
     expect(r.decision).toBe("allowed");
+  });
+
+  it("blocks on the floor rather than deferring on a met daily cap, naming the ICP reason", () => {
+    const r = evaluate({
+      ...base,
+      sentToday: 40,
+      actionType: "email.cold",
+      policy: policy({ minIcpScore: 70, dailyCap: 40 }),
+      leadIcpScore: 45,
+    });
+    expect(r.decision).toBe("blocked");
+    expect(r.reason).toContain("below the floor");
+  });
+});
+
+describe("resolveLevel", () => {
+  it("coerces an out-of-range level to draft-only", () => {
+    const r = resolveLevel(7, "email.cold");
+    expect(r.requested).toBe(LEVEL.DRAFT_ONLY);
+    expect(r.effectiveLevel).toBe(LEVEL.DRAFT_ONLY);
+  });
+
+  it("coerces a non-integer level to draft-only", () => {
+    const r = resolveLevel(1.5, "email.cold");
+    expect(r.requested).toBe(LEVEL.DRAFT_ONLY);
+    expect(r.effectiveLevel).toBe(LEVEL.DRAFT_ONLY);
+  });
+
+  it("still clamps a valid requested level to the action's ceiling", () => {
+    const r = resolveLevel(LEVEL.AUTONOMOUS, "linkedin.dm");
+    expect(r.effectiveLevel).toBe(LEVEL.APPROVE_EACH);
+    expect(r.clamped).toBe(true);
   });
 });
 

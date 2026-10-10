@@ -13,14 +13,16 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "seed": "tsx scripts/seed.ts",
-    "preflight": "tsx scripts/preflight.ts"
+    "seed": "tsx --env-file-if-exists=.env scripts/seed.ts",
+    "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts"
   },
   "dependencies": {
-    "drizzle-orm": "^0.44.2",
+    "drizzle-orm": "^0.45.4",
     "next": "^15.5.4",
     "pg": "^8.13.1",
     "react": "^19.1.0",
@@ -28,13 +30,17 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
-    "drizzle-kit": "^0.31.1",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.4",
+    "prettier": "^3.9.10",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.5"
+    "vitest": "^4.1.11"
   }
 }

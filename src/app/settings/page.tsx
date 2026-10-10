@@ -1,6 +1,7 @@
 import { db, schema } from "@/db";
 import { ACTION_DEFAULTS } from "@/lib/policy/defaults";
-import { ACTION_TYPES, approvalFor, isLevel, type Level } from "@/lib/policy/levels";
+import { resolveLevel } from "@/lib/policy/engine";
+import { ACTION_TYPES, approvalFor } from "@/lib/policy/levels";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,10 @@ export default async function SettingsPage() {
     <main>
       <h1>Policy</h1>
       <p className="lede">
-        Every outbound action passes through this table before it sends. You set the level; the
-        ceiling is what this build will not exceed, and each ceiling states its reason.
+        Every outbound action is designed to pass through this evaluation before it sends. No
+        caller is wired to it yet, so this table shows what each action is configured to do, not
+        live enforcement — see the Roadmap. You set the level; the ceiling is what this build will
+        not exceed, and each ceiling states its reason.
       </p>
 
       {killSwitch && (
@@ -42,9 +45,15 @@ export default async function SettingsPage() {
             {ACTION_TYPES.map((action) => {
               const spec = ACTION_DEFAULTS[action];
               const row = configured.get(action);
-              const requested = row && isLevel(row.level) ? row.level : spec.shipsAt;
-              const effective = Math.min(requested, spec.ceiling) as Level;
-              const clamped = effective < requested;
+              // No configured row yet: show the shipped default. A row with
+              // an invalid stored level is handled by resolveLevel the same
+              // way the engine handles it, rather than this page guessing on
+              // its own and disagreeing with what actually ships.
+              const rawRequested = row ? row.level : spec.shipsAt;
+              const { requested, effectiveLevel: effective, clamped } = resolveLevel(
+                rawRequested,
+                action,
+              );
               return (
                 <tr key={action}>
                   <td className="mono">{action}</td>

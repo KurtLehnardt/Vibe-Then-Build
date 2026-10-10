@@ -15,9 +15,10 @@ export default async function ApprovalsPage() {
     <main>
       <h1>Approvals</h1>
       <p className="lede">
-        Nothing in this queue has left the instance. Approving a draft marks it ready for its
-        channel; the policy gate still runs at send time, so an approval alone cannot bypass a cap,
-        quiet hours, or the kill switch.
+        Nothing in this queue has left the instance. This view is read-only for now: there is no
+        approve action yet, so a draft cannot be marked ready from here. Once approving exists, it
+        will still pass through the policy gate at send time, so an approval alone will never
+        bypass a daily cap, quiet hours, or the kill switch.
       </p>
 
       {pending.length === 0 ? (
