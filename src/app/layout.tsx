@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Loop Engine",
+  title: "Vibe Then Build",
   description: "Operator cockpit for brand, outreach, pipeline, delivery, and margin.",
 };
 
@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div className="shell">
           <nav className="top">
-            <span className="brand">Loop Engine</span>
+            <span className="brand">Vibe Then Build</span>
             <a href="/">Progress</a>
             <a href="/approvals">Approvals</a>
             <a href="/pipeline">Pipeline</a>

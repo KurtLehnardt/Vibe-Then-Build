@@ -2,13 +2,13 @@
 
 ## Process boundary, not source merge
 
-Loop Engine composes with existing open-source tools at the process boundary rather than merging
+Vibe Then Build composes with existing open-source tools at the process boundary rather than merging
 their source into this tree. Two integrations ship as of P1:
 
-- **Postiz** handles publishing. Loop Engine calls its public API; Postiz's own code never enters
+- **Postiz** handles publishing. Vibe Then Build calls its public API; Postiz's own code never enters
   this repository.
 - **OpenOutreach** handles lead discovery. It runs as a separate process and writes a CSV export;
-  Loop Engine reads that file and never imports or calls into OpenOutreach's code.
+  Vibe Then Build reads that file and never imports or calls into OpenOutreach's code.
 
 Three reasons drove this, not one:
 
@@ -30,12 +30,12 @@ Three reasons drove this, not one:
 
 | Integration | Covers | License | How we talk to it | Without it |
 |---|---|---|---|---|
-| [Postiz](https://github.com/gitroomhq/postiz-app) | Social publishing and scheduling | AGPL-3.0 | HTTP, `{POSTIZ_URL}/public/v1`, API-key auth, `POST /public/v1/posts` to create a post. Self-hosted rate limit is 90 requests/hour. | `linkedin.post` is unavailable. Nothing else in Loop Engine is affected. |
-| [OpenOutreach](https://github.com/eracle/OpenOutreach) | ICP-driven B2B lead discovery | GPL-3.0 | Run as its own process; Loop Engine reads the CSV it exports to `OPENOUTREACH_EXPORT_DIR`. No API call, no shared process, no shared database. | Lead import from OpenOutreach is unavailable. Leads can still be added by hand or through any other inbound adapter. |
+| [Postiz](https://github.com/gitroomhq/postiz-app) | Social publishing and scheduling | AGPL-3.0 | HTTP, `{POSTIZ_URL}/public/v1`, API-key auth, `POST /public/v1/posts` to create a post. Self-hosted rate limit is 90 requests/hour. | `linkedin.post` is unavailable. Nothing else in Vibe Then Build is affected. |
+| [OpenOutreach](https://github.com/eracle/OpenOutreach) | ICP-driven B2B lead discovery | GPL-3.0 | Run as its own process; Vibe Then Build reads the CSV it exports to `OPENOUTREACH_EXPORT_DIR`. No API call, no shared process, no shared database. | Lead import from OpenOutreach is unavailable. Leads can still be added by hand or through any other inbound adapter. |
 
 ### Deliberately not integrated
 
-**Twenty** (AGPL-3.0) is a full modern CRM and is not integrated, on purpose. Loop Engine's pricing,
+**Twenty** (AGPL-3.0) is a full modern CRM and is not integrated, on purpose. Vibe Then Build's pricing,
 proposals, and delivery tracking all read and write the same `deals` record in this project's own
 schema. Putting a CRM next door, with its own notion of a deal, would create two sources of truth
 for the same piece of work — which one is current would become a standing question instead of a
@@ -46,12 +46,12 @@ to also claim that role.
 is source-available, not open source, and it restricts redistribution. This repository is
 AGPL-3.0, which requires that source be redistributable under its terms; a Sustainable-Use-licensed
 dependency cannot ship inside it. This is not a judgment about Linki's approach — it is the same
-no-LinkedIn-automation stance Loop Engine takes — it is a hard licensing wall.
+no-LinkedIn-automation stance Vibe Then Build takes — it is a hard licensing wall.
 
 ## Adding a new adapter
 
 Every integration goes behind `src/lib/channels/types.ts`, which is deliberately thin: an adapter
-translates between Loop Engine's own types and one external system, and it never decides whether
+translates between Vibe Then Build's own types and one external system, and it never decides whether
 something may send. That decision belongs to the policy engine, which runs before any adapter is
 called.
 

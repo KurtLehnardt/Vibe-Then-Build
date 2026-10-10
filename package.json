@@ -1,9 +1,9 @@
 {
-  "name": "loop-engine",
+  "name": "vibe-then-build",
   "version": "0.0.1",
   "private": false,
   "license": "AGPL-3.0-or-later",
-  "description": "Operator cockpit for an AI consulting practice: brand, content, outreach, pipeline, delivery, and local-model margin tracking. Self-hosted, policy-gated, free to run on Ollama.",
+  "description": "Operator cockpit for building a profitable AI consulting practice: brand positioning, content drafting, outreach sequencing, a pipeline with value-based pricing, delivery records, and local-model cost tracking. Self-hosted, policy-gated, free to run on Ollama.",
   "type": "module",
   "engines": {
     "node": ">=22"

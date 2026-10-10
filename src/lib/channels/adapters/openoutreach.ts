@@ -3,7 +3,7 @@
  *
  * OpenOutreach (github.com/eracle/OpenOutreach) is a separate GPL-3.0 Python
  * process that does ICP-driven B2B lead discovery and writes its results to
- * CSV. Loop Engine is AGPL-3.0 TypeScript, so the two never share a process
+ * CSV. Vibe Then Build is AGPL-3.0 TypeScript, so the two never share a process
  * or a codebase: this adapter only ever reads a CSV file that OpenOutreach
  * already produced. It must never shell into OpenOutreach or import any of
  * its code.

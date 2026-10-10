@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgresql://loop:loop@localhost:5432/loop_engine",
+    url: process.env.DATABASE_URL ?? "postgresql://vtb:loop@localhost:5432/vibe_then_build",
   },
 });

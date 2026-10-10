@@ -1,0 +1,1744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Field-Tested AI Agency Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     THE FIELD-TESTED AI AGENCY LOOP — deck stylesheet
+     Palette: Charcoal / Paper / Rust / Moss / Brass / Slate
+     Type: Fraunces (display) + IBM Plex Sans (body)
+     ============================================================ */
+
+  :root {
+    --charcoal: #1c1a17;
+    --paper: #f3ecdf;
+    --rust: #b23a1d;
+    --moss: #45552f;
+    --brass: #8a6a2f;
+    --slate: #6b6459;
+
+    --bg: var(--paper);
+    --bg-raised: #e8dec7;
+    --fg: var(--charcoal);
+    --fg-soft: var(--slate);
+    --line: rgba(28, 26, 23, 0.18);
+    --line-strong: rgba(28, 26, 23, 0.32);
+    --accent: var(--rust);
+    --accent-2: var(--moss);
+    --accent-3: var(--brass);
+    --chip-fg: var(--paper);
+
+    --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: var(--charcoal);
+      --bg-raised: #27221c;
+      --fg: var(--paper);
+      --fg-soft: #b6ab97;
+      --line: rgba(243, 236, 223, 0.16);
+      --line-strong: rgba(243, 236, 223, 0.3);
+      --accent: #e3714c;
+      --accent-2: #90ab74;
+      --accent-3: #d7b369;
+      --chip-fg: #1c1a17;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.45;
+    overflow: hidden;
+  }
+
+  ::selection { background: var(--accent); color: var(--chip-fg); }
+
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    margin: 0;
+    color: var(--fg);
+  }
+
+  p { margin: 0; }
+  ul, ol { margin: 0; padding: 0; }
+  li { list-style: none; }
+
+  a { color: inherit; }
+
+  .mono-figure {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  /* ---------- deck shell ---------- */
+
+  #deck {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .slide {
+    display: none;
+    position: absolute;
+    inset: 0;
+    flex-direction: column;
+    padding: 5.2vh 7vw 6vh;
+    overflow: hidden;
+  }
+
+  .slide.is-active { display: flex; }
+
+  .slide-inner {
+    max-width: 1180px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .kicker {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-3);
+    margin-bottom: 1.1rem;
+  }
+  .kicker .sep { color: var(--line-strong); font-weight: 400; }
+  .kicker .dim { color: var(--fg-soft); font-weight: 600; }
+
+  .rule {
+    height: 3px;
+    width: 64px;
+    background: var(--accent);
+    margin: 0.9rem 0 1.4rem;
+    border-radius: 2px;
+  }
+
+  h2.headline {
+    font-size: clamp(1.7rem, 3vw, 2.5rem);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+  }
+
+  .deck-body {
+    margin-top: 1.6rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1.1rem;
+  }
+
+  /* ---------- bullet lists ---------- */
+
+  ul.bullets, ol.bullets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.72rem;
+  }
+
+  ul.bullets li, ol.bullets li {
+    position: relative;
+    padding-left: 1.3rem;
+    font-size: clamp(1.02rem, 1.5vw, 1.22rem);
+    line-height: 1.38;
+  }
+
+  ul.bullets li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.55em;
+    width: 7px;
+    height: 7px;
+    background: var(--accent);
+    border-radius: 1px;
+    transform: rotate(45deg);
+  }
+
+  ol.bullets { counter-reset: step; }
+  ol.bullets li { padding-left: 2.1rem; }
+  ol.bullets li::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: -0.05em;
+    width: 1.55rem;
+    height: 1.55rem;
+    border-radius: 3px;
+    background: var(--bg-raised);
+    border: 1px solid var(--line-strong);
+    color: var(--accent);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  li strong { color: var(--fg); font-weight: 700; }
+  li em { font-style: italic; color: var(--fg-soft); }
+
+  .lede {
+    font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+    color: var(--fg-soft);
+    max-width: 62ch;
+    line-height: 1.45;
+  }
+
+  /* ---------- title slide ---------- */
+
+  .slide-title .slide-inner {
+    justify-content: center;
+  }
+  .slide-title .eyebrow {
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 0.82rem;
+    color: var(--accent-3);
+    margin-bottom: 1.3rem;
+  }
+  .slide-title h1 {
+    font-size: clamp(2.4rem, 6vw, 4.6rem);
+    line-height: 1.02;
+    letter-spacing: -0.015em;
+    max-width: 16ch;
+  }
+  .slide-title .sub {
+    margin-top: 1.1rem;
+    font-size: clamp(1.1rem, 2.1vw, 1.5rem);
+    color: var(--fg-soft);
+    font-family: var(--font-body);
+    max-width: 44ch;
+  }
+  .slide-title .meta-row {
+    margin-top: 2.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 0.9rem;
+  }
+  .date-chip {
+    font-weight: 700;
+    font-size: 0.86rem;
+    letter-spacing: 0.04em;
+    padding: 0.42em 0.85em;
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    color: var(--fg-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .date-chip b { color: var(--accent); margin-right: 0.45em; }
+  .slide-title .colophon {
+    position: absolute;
+    bottom: 5.5vh;
+    left: 7vw;
+    font-size: 0.82rem;
+    color: var(--fg-soft);
+    letter-spacing: 0.02em;
+  }
+
+  /* ---------- agenda / arc slide ---------- */
+
+  .arc-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.9rem;
+    margin-bottom: 1.4rem;
+  }
+  .arc-card {
+    border: 1px solid var(--line-strong);
+    border-top: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 1rem 1.1rem;
+    background: var(--bg-raised);
+  }
+  .arc-card .num {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--accent);
+  }
+  .arc-card .date {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--fg-soft);
+    margin-top: 0.2rem;
+    letter-spacing: 0.02em;
+  }
+  .arc-card .tag {
+    margin-top: 0.55rem;
+    font-size: 0.98rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .arc-note {
+    font-size: 1.04rem;
+    color: var(--fg-soft);
+    max-width: 78ch;
+    line-height: 1.5;
+    border-left: 3px solid var(--accent-2);
+    padding-left: 1rem;
+  }
+
+  /* ---------- session title slide ---------- */
+
+  .slide-session-title .slide-inner {
+    display: grid;
+    grid-template-columns: minmax(170px, 230px) 1fr;
+    align-items: center;
+    gap: 2.4rem;
+    height: 100%;
+  }
+  .rail-col {
+    border-right: 1px solid var(--line-strong);
+    height: 72%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .rail-col .snum {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(4.5rem, 9vw, 7.5rem);
+    line-height: 0.85;
+    color: var(--accent);
+  }
+  .rail-col .sdate {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--fg-soft);
+    letter-spacing: 0.02em;
+  }
+  .rail-col .stag {
+    margin-top: 0.4rem;
+    font-weight: 700;
+    font-size: 0.86rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent-3);
+    line-height: 1.4;
+  }
+  .session-main h3 {
+    font-size: clamp(1.9rem, 3.6vw, 3rem);
+    line-height: 1.08;
+    max-width: 18ch;
+  }
+  .session-main .focus {
+    margin-top: 1.1rem;
+    font-size: clamp(1.05rem, 1.7vw, 1.3rem);
+    color: var(--fg-soft);
+    max-width: 50ch;
+    line-height: 1.48;
+  }
+
+  /* ---------- objective / target outcome ---------- */
+
+  .obj-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 2.2rem;
+    align-items: start;
+  }
+  .target-box {
+    background: var(--bg-raised);
+    border: 1px solid var(--line-strong);
+    border-left: 4px solid var(--accent-2);
+    border-radius: 4px;
+    padding: 1.2rem 1.3rem;
+  }
+  .target-box .label {
+    font-weight: 700;
+    font-size: 0.74rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 0.7rem;
+    display: block;
+  }
+  .target-box ul.bullets li { font-size: 1.02rem; }
+  .prep-line {
+    margin-top: 1.1rem;
+    font-size: 0.92rem;
+    color: var(--fg-soft);
+    border-top: 1px solid var(--line);
+    padding-top: 0.8rem;
+  }
+  .prep-line b { color: var(--accent-3); font-weight: 700; }
+
+  /* ---------- tables ---------- */
+
+  .tbl-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.96rem;
+  }
+  thead tr { background: var(--bg-raised); }
+  th, td {
+    text-align: left;
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 700;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-soft);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.key {
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  td.num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--accent-3);
+  }
+
+  /* ---------- card grids (modular templates) ---------- */
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.85rem;
+  }
+  .tmpl-card {
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    padding: 0.85rem 0.95rem;
+    background: var(--bg-raised);
+  }
+  .tmpl-card h5 {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.98rem;
+    margin-bottom: 0.3rem;
+  }
+  .tmpl-card p {
+    font-size: 0.86rem;
+    color: var(--fg-soft);
+    line-height: 1.35;
+  }
+  .footer-line {
+    margin-top: 0.3rem;
+    font-size: 0.98rem;
+    color: var(--fg-soft);
+    border-left: 3px solid var(--accent);
+    padding-left: 0.9rem;
+    line-height: 1.45;
+  }
+
+  /* ---------- objection chip grid ---------- */
+
+  .chip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem;
+  }
+  .obj-chip {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    font-size: 0.98rem;
+  }
+  .obj-chip .n {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 1rem;
+  }
+
+  /* ---------- SOP list ---------- */
+
+  .sop-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .sop-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 1rem;
+    align-items: baseline;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .sop-row:last-child { border-bottom: none; }
+  .sop-code {
+    font-weight: 700;
+    color: var(--accent-3);
+    font-size: 0.88rem;
+    letter-spacing: 0.02em;
+  }
+  .sop-name { font-size: 1.02rem; font-weight: 600; }
+
+  /* ---------- assignment / due ---------- */
+
+  .due-chip {
+    margin-top: 1.2rem;
+    align-self: flex-start;
+    background: var(--accent);
+    color: var(--chip-fg);
+    font-weight: 700;
+    font-size: 0.92rem;
+    padding: 0.6rem 1.05rem;
+    border-radius: 4px;
+    letter-spacing: 0.01em;
+  }
+
+  /* ---------- closing slide ---------- */
+
+  .loop-chain {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .loop-row {
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 0.9rem;
+    align-items: baseline;
+  }
+  .loop-row .n {
+    font-family: var(--font-display);
+    font-weight: 900;
+    color: var(--accent);
+    font-size: 1.5rem;
+  }
+  .loop-row p { font-size: 1.06rem; line-height: 1.4; }
+  .loop-row b { color: var(--fg); }
+
+  /* ---------- speaker notes ---------- */
+
+  .notes {
+    display: none;
+    margin-top: 1.2rem;
+    padding: 1rem 1.2rem;
+    background: var(--bg-raised);
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    max-height: 32vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    color: var(--fg-soft);
+    line-height: 1.5;
+  }
+  .notes .notes-label {
+    display: block;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  .notes p + p { margin-top: 0.55rem; }
+  body.show-notes .notes { display: block; }
+
+  /* ---------- chrome: counter, nav buttons, hint ---------- */
+
+  .chrome {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 20;
+  }
+  .counter {
+    position: fixed;
+    bottom: 2.2vh;
+    right: 2.4vw;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--fg-soft);
+    letter-spacing: 0.03em;
+    background: var(--bg);
+    padding: 0.3em 0.6em;
+    pointer-events: auto;
+  }
+  .navbtn {
+    position: fixed;
+    bottom: 1.9vh;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 3px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-raised);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .navbtn:hover { background: var(--accent); color: var(--chip-fg); border-color: var(--accent); }
+  .navbtn.prev { left: 2.4vw; }
+  .navbtn.next { left: calc(2.4vw + 2.9rem); }
+
+  .navbtn:focus-visible,
+  #deck:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .click-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    z-index: 5;
+  }
+  .click-zone.left { left: 0; cursor: w-resize; }
+  .click-zone.right { right: 0; cursor: e-resize; }
+
+  .hint {
+    position: fixed;
+    left: 50%;
+    bottom: 9vh;
+    transform: translateX(-50%);
+    background: var(--fg);
+    color: var(--bg);
+    font-size: 0.86rem;
+    font-weight: 600;
+    padding: 0.65em 1.1em;
+    border-radius: 4px;
+    z-index: 30;
+    opacity: 1;
+    transition: opacity 1s ease;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .hint.hint-out { opacity: 0; }
+  .hint kbd {
+    font-family: var(--font-body);
+    font-weight: 700;
+    background: rgba(255,255,255,0.14);
+    border-radius: 2px;
+    padding: 0.05em 0.4em;
+    margin: 0 0.1em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hint { transition: none; }
+  }
+
+  /* ---------- responsive scaling down ---------- */
+
+  @media (max-width: 900px) {
+    .obj-grid { grid-template-columns: 1fr; }
+    .arc-row { grid-template-columns: repeat(2, 1fr); }
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
+    .chip-grid { grid-template-columns: 1fr; }
+    .slide-session-title .slide-inner { grid-template-columns: 1fr; }
+    .rail-col { border-right: none; border-bottom: 1px solid var(--line-strong); height: auto; padding-bottom: 1rem; }
+  }
+
+  /* ============================================================
+     PRINT — one slide per page, backgrounds intact, nothing clipped
+     ============================================================ */
+  @media print {
+    html, body { height: auto; overflow: visible; background: var(--paper); }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+    .chrome, .counter, .navbtn, .click-zone, .hint { display: none !important; }
+    #deck { position: static; width: auto; height: auto; }
+    .slide {
+      display: flex !important;
+      position: static;
+      height: auto;
+      min-height: 100vh;
+      page-break-after: always;
+      break-after: page;
+      overflow: visible;
+      padding: 10mm 14mm;
+    }
+    .slide:last-child { page-break-after: auto; break-after: auto; }
+    .slide-inner { height: auto; }
+    .notes { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="deck" tabindex="0" aria-label="Slide deck">
+
+  <!-- ============================================================
+       0. TITLE
+       ============================================================ -->
+  <section class="slide slide-title is-active" data-index="0">
+    <div class="slide-inner">
+      <div class="eyebrow">Field manual &middot; operator course</div>
+      <h1>The Field-Tested AI Agency Loop</h1>
+      <p class="sub">Marketing, Sales, Delivery &amp; Local Infrastructure &mdash; four live sessions that chain into one practice.</p>
+      <div class="meta-row">
+        <span class="date-chip"><b>01</b>Tue Nov 3</span>
+        <span class="date-chip"><b>02</b>Tue Nov 10</span>
+        <span class="date-chip"><b>03</b>Tue Nov 17</span>
+        <span class="date-chip"><b>04</b>Mon Nov 30</span>
+      </div>
+    </div>
+    <div class="colophon">2026 cohort &middot; curriculum as taught, Part I</div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>This deck preserves the original four-session curriculum draft exactly as written: dates, prices, model names, and tool names are carried through unedited. A separate, revised planning document is where the owner's updated thinking lives &mdash; this deck is the historical/teaching record of the draft, not a replacement for it.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================
+       1. AGENDA / ARC
+       ============================================================ -->
+  <section class="slide" data-index="1">
+    <div class="slide-inner">
+      <div class="kicker">Course arc</div>
+      <h2 class="headline">Four sessions, one loop</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="arc-row">
+          <div class="arc-card">
+            <div class="num">01</div>
+            <div class="date">Tue &middot; Nov 3</div>
+            <div class="tag">Top of funnel &mdash; content + outreach</div>
+          </div>
+          <div class="arc-card">
+            <div class="num">02</div>
+            <div class="date">Tue &middot; Nov 10</div>
+            <div class="tag">Close &mdash; offers + pricing</div>
+          </div>
+          <div class="arc-card">
+            <div class="num">03</div>
+            <div class="date">Tue &middot; Nov 17</div>
+            <div class="tag">Deliver &mdash; pipeline + handoff</div>
+          </div>
+          <div class="arc-card">
+            <div class="num">04</div>
+            <div class="date">Mon &middot; Nov 30</div>
+            <div class="tag">Margin &mdash; local inference</div>
+          </div>
+        </div>
+        <p class="arc-note">Sessions are sequential by design &mdash; each one consumes the last session's output. Week 2 prices the calls Week 1 booked. Week 3 delivers what Week 2 sold. Week 4 re-prices Week 3's delivery cost from the bottom of the stack. Session 04 falls on a Monday because Nov 23&ndash;27 (Thanksgiving week) is a build week, not a class week.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Emphasize the chaining explicitly before Session 01 starts: nothing here is a standalone workshop. A student who skips Session 01's outreach volume shows up to Session 02 with nothing to price; a student who doesn't sell in Session 02 has nothing to deliver in Session 03; a student who doesn't ship in Session 03 has no real billing data to re-price in Session 04.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================
+       SESSION 01 — LinkedIn Content & Outreach System
+       ============================================================ -->
+
+  <section class="slide slide-session-title" data-index="2">
+    <div class="slide-inner">
+      <div class="rail-col">
+        <span class="snum">01</span>
+        <span class="sdate">Tue &middot; Nov 3</span>
+        <span class="stag">Top of funnel<br>Content + outreach</span>
+      </div>
+      <div class="session-main">
+        <h3>LinkedIn Content &amp; Outreach System</h3>
+        <p class="focus">The organic flywheel and outbound loop that builds authority, books qualification calls, and keeps the top of the funnel full without ads.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Frame this as an instrumented system, not "posting more." Everything downstream &mdash; price, delivery, margin &mdash; depends on a full top of funnel.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="3">
+    <div class="slide-inner">
+      <div class="kicker">Session 01 <span class="sep">&middot;</span> <span class="dim">Objective &amp; target outcome</span></div>
+      <h2 class="headline">Replace sporadic posting and cold DMs with one instrumented loop</h2>
+      <div class="rule"></div>
+      <div class="deck-body obj-grid">
+        <ul class="bullets">
+          <li>A narrow positioning wedge, not a generic "AI consultant" label.</li>
+          <li>A profile that converts like a landing page.</li>
+          <li>Five repeatable content formats, posted on a fixed cadence.</li>
+          <li>A four-touch outreach sequence with a qualification gate in front of your calendar.</li>
+        </ul>
+        <div class="target-box">
+          <span class="label">Target outcome</span>
+          <ul class="bullets">
+            <li>Profile rebuilt and live within 48 hours</li>
+            <li>20-post content bank built, 10 posts drafted</li>
+            <li>50 outreach sequences running</li>
+            <li>Minimum 2 qualification calls booked before Session 02</li>
+          </ul>
+          <p class="prep-line"><b>Prep:</b> LinkedIn Creator Mode, booking page, scheduling tool, tracker, Loom; 90-day post analytics + SSI score exported; 50-company list + 3 proof points with numbers; pre-reads assigned &mdash; see notes.</p>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>Pre-session preparation in full.</b> Accounts: LinkedIn with Creator Mode enabled; a booking page (Cal.com or Calendly) with a 25-minute event; a scheduling tool (Typefully, Buffer, or Taplio); Notion or Airtable for the tracker; Loom.</p>
+      <p>Data: export the last 90 days of LinkedIn post analytics as CSV, plus a current SSI score screenshot &mdash; it is the benchmark used again in Session 04.</p>
+      <p>Raw material: a written list of 50 companies in industries the student has actually worked in or near, and 3 concrete results they have produced &mdash; paid, unpaid, or internal &mdash; with numbers attached.</p>
+      <p>Pre-read: "Offer&ndash;Market Fit Before Content" (8 pages, provided) and the annotated teardown of three ICP-specific profiles.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="4">
+    <div class="slide-inner">
+      <div class="kicker">Session 01 <span class="sep">&middot;</span> <span class="dim">1.1</span></div>
+      <h2 class="headline">Positioning before posting: the narrow wedge</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>ICP triangulation across three axes &mdash; industry &times; role &times; recurring operational pain &mdash; until it fits one sentence a stranger can repeat.</li>
+          <li>The expensive-problem test: the pain must be recurring, measurable, and cost more than $10k/year in labor, error, or lost revenue &mdash; or don't post about it.</li>
+          <li>Authority asymmetry: "AI consultant" loses every time to "I cut claims-intake time for mid-size P&amp;C carriers." Pick a wedge you can defend in 10 minutes of technical questioning.</li>
+          <li>Profile as landing page: headline formula, banner as proof surface, Featured section as lead-magnet delivery, About section written as case narrative, not r&eacute;sum&eacute;.</li>
+          <li>Proof inventory: turning weak evidence &mdash; internal projects, unpaid builds, side experiments &mdash; into legitimate numbered claims without overstating them.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The wedge must survive a technical cross-examination, not just sound good on a slide. "AI consultant" is a title; "I cut claims-intake time for mid-size P&amp;C carriers" is a claim someone can test. The $10k/year threshold is a hard filter &mdash; anything under it produces content nobody buys from, because the reader can't justify spending to fix it.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="5">
+    <div class="slide-inner">
+      <div class="kicker">Session 01 <span class="sep">&middot;</span> <span class="dim">1.2</span></div>
+      <h2 class="headline">The content flywheel: five formats that convert</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li><strong>Teardown post</strong> &mdash; real before/after workflow with time and cost figures. Highest-converting format; draws inbound from operators, not peers.</li>
+          <li><strong>Build log</strong> &mdash; screenshots of work in progress, including the failure. Builds technical credibility that survives a buyer's engineer.</li>
+          <li><strong>Contrarian ops take</strong> &mdash; argues against tool worship and toward process. Drives reach and comment volume.</li>
+          <li><strong>Result document post</strong> &mdash; multi-page PDF/carousel of a single engagement outcome. Drives profile views and saves.</li>
+          <li><strong>Diagnostic checklist</strong> &mdash; reader scores themselves against it; doubles as the lead-magnet hook.</li>
+          <li>Cadence: 5 posts/week, allocated 3 authority / 1 proof / 1 offer-adjacent.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The offer-adjacent post fails without the other four &mdash; it only converts because the first four built the trust it spends. Hook mechanics: the first 210 characters decide the open rate, line-break discipline keeps it scannable, never put a link in the post body (kills reach), and use the comment-as-CTA pattern instead of a link.</p>
+      <p>Comment harvesting: 10 strategic comments per day on ICP posts. The path comment &rarr; profile view &rarr; connect &rarr; conversation consistently outperforms cold connect requests.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="6">
+    <div class="slide-inner">
+      <div class="kicker">Session 01 <span class="sep">&middot;</span> <span class="dim">1.3</span></div>
+      <h2 class="headline">The outreach loop: a DM workflow that doesn't read as spam</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Lead sources ranked by conversion: your own post engagers, commenters on ICP-adjacent posts, then a built list (Sales Navigator, Apollo, Clay) filtered by trigger events.</li>
+          <li>Four-touch sequence: <em>Engage</em> (meaningful comment, no ask) &rarr; <em>Connect</em> (no pitch) &rarr; <em>Value drop</em> (something useful and specific) &rarr; <em>Soft ask</em> (one sentence, one question).</li>
+          <li>Trigger-based openers: new role, funding, hiring posts, tech-stack signals, public complaints about a process &mdash; personalization from research, not flattery.</li>
+          <li>Qualification gate in the thread: owns the process? budget exists? timeline? &mdash; asked before the calendar link appears.</li>
+          <li>Reply triage, scripted by branch: interested, not now, wrong person, hostile &mdash; plus a no-response close that recovers roughly one in ten dead threads.</li>
+          <li>Volume ceilings and account safety: connection limits, message pacing &mdash; automated sending tools get accounts restricted.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The qualification gate exists so the calendar only fills with people who can actually buy. The no-response close is a single message sent after the thread has gone cold &mdash; it quietly recovers about 10% of otherwise-dead conversations and should never be skipped.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="7">
+    <div class="slide-inner">
+      <div class="kicker">Session 01 <span class="sep">&middot;</span> <span class="dim">1.4</span></div>
+      <h2 class="headline">Lead magnet and booking mechanics</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Build exactly one asset: the <strong>AI Readiness Teardown</strong> &mdash; a one-page diagnostic completed in four minutes, delivered as a PDF plus a 3-minute Loom.</li>
+          <li>Deliver in-thread rather than behind a gated form &mdash; trading email capture for conversation continuity is the better trade at this funnel volume.</li>
+          <li>Call-page copy: name the call "Automation Teardown," not "discovery" or "intro chat." Set a 25-minute cap and state what the prospect leaves with.</li>
+          <li>Show-rate operations: instant confirmation message, 24-hour reminder, and a three-question pre-call form that doubles as the first half of discovery.</li>
+          <li>Six funnel metrics worth tracking weekly: impressions &rarr; profile views &rarr; connects accepted &rarr; conversations started &rarr; calls booked &rarr; calls held.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The six-metric funnel is diagnostic, not decorative: a weekly review of these six numbers in sequence tells you exactly which stage is actually broken, rather than guessing at "more content" or "better targeting."</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-sops" data-index="8">
+    <div class="slide-inner">
+      <div class="kicker">Session 01 <span class="sep">&middot;</span> <span class="dim">SOPs &amp; deliverables</span></div>
+      <h2 class="headline">Handed out this session</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="sop-list">
+          <div class="sop-row"><span class="sop-code">SOP 1.1</span><span class="sop-name">Positioning Worksheet</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 1.2</span><span class="sop-name">Profile Rebuild Checklist</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 1.3</span><span class="sop-name">30-Day Content Calendar</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 1.4</span><span class="sop-name">DM Sequence Pack</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 1.5</span><span class="sop-name">AI Readiness Teardown</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 1.6</span><span class="sop-name">Funnel Tracker</span></div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>SOP 1.1</b> &mdash; ICP triangulation grid, expensive-problem test, wedge statement builder, with 3 completed examples.</p>
+      <p><b>SOP 1.2</b> &mdash; headline, banner, Featured, and About templates plus a before/after gallery.</p>
+      <p><b>SOP 1.3</b> &mdash; 5 format templates, 50 pre-written hooks, posting cadence map.</p>
+      <p><b>SOP 1.4</b> &mdash; 12 scripts across the 4 touches, qualification gate questions, reply-triage decision tree.</p>
+      <p><b>SOP 1.5</b> &mdash; editable one-page diagnostic plus the Loom delivery script.</p>
+      <p><b>SOP 1.6</b> &mdash; Airtable base and Sheets version, pre-built formulas and weekly target thresholds.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-assignment" data-index="9">
+    <div class="slide-inner">
+      <div class="kicker">Session 01 <span class="sep">&middot;</span> <span class="dim">Field assignment</span></div>
+      <h2 class="headline">Due before Session 02</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ol class="bullets">
+          <li>Publish the rebuilt profile within 48 hours of the session.</li>
+          <li>Post five times before Session 02, using at least three of the five formats.</li>
+          <li>Run 50 outreach sequences at roughly 10 per day. Log every reply in SOP 1.6 &mdash; including the silent ones.</li>
+          <li>Deliver the AI Readiness Teardown to a minimum of 10 people.</li>
+          <li>Book a minimum of 2 Automation Teardown calls. Record one and bring the transcript to Session 02 &mdash; we price it live.</li>
+        </ol>
+        <span class="due-chip">Due: Mon Nov 9, 6:00pm &mdash; submit funnel tracker + one call transcript</span>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The transcript requirement is not optional &mdash; Session 02 opens by pricing a real call live in front of the cohort, and it needs to be someone's actual recording.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================
+       SESSION 02 — How to Sell AI Automation & Consulting
+       ============================================================ -->
+
+  <section class="slide slide-session-title" data-index="10">
+    <div class="slide-inner">
+      <div class="rail-col">
+        <span class="snum">02</span>
+        <span class="sdate">Tue &middot; Nov 10</span>
+        <span class="stag">Close<br>Offers + pricing</span>
+      </div>
+      <div class="session-main">
+        <h3>How to Sell AI Automation &amp; Consulting</h3>
+        <p class="focus">Closing high-ticket consulting and automation work without selling hours, without selling a tech stack, and without quoting on the first call.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>This session runs on the cohort's own pipeline from Session 01, not case studies &mdash; call out students who show up without a recording or transcript early.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="11">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">Objective &amp; target outcome</span></div>
+      <h2 class="headline">Leave with a complete sales system</h2>
+      <div class="rule"></div>
+      <div class="deck-body obj-grid">
+        <ul class="bullets">
+          <li>A three-tier offer ladder with a defensible price floor.</li>
+          <li>A discovery call that produces the price instead of deferring it.</li>
+          <li>Scripted responses to the eight objections that kill enterprise AI deals.</li>
+          <li>A one-page proposal with terms that protect delivery margin.</li>
+        </ul>
+        <div class="target-box">
+          <span class="label">Target outcome</span>
+          <ul class="bullets">
+            <li>Offer ladder written and priced</li>
+            <li>One real opportunity run through the value calculator</li>
+            <li>Two proposals sent</li>
+            <li>One paid diagnostic sold at $2,500 or above within 7 days</li>
+          </ul>
+          <p class="prep-line"><b>Prep:</b> bring a Session 01 call recording or transcript; know your delivery cost per build; proposal tool, e-signature, and invoicing in place; pre-reads assigned &mdash; see notes.</p>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>Pre-session preparation in full.</b> Bring one real call recording or transcript from Session 01's field work &mdash; sessions run on the student's own pipeline, not case studies. Know your cost: delivery cost per build, estimated hours &times; internal rate, including subcontractors &mdash; pricing without this number is guessing.</p>
+      <p>Accounts: a proposal tool (PandaDoc, Google Docs, or Qwilr), e-signature, and invoicing with Stripe or equivalent &mdash; payment rails must exist before the session.</p>
+      <p>Pre-read: "Value Pricing for Implementation Work" (11 pages, provided) and the fully annotated 38-minute discovery call recording.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-table" data-index="12">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">2.1</span></div>
+      <h2 class="headline">Offer architecture: killing the hourly rate</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Tier</th><th>Price band</th><th>What it sells</th><th>Job it does</th></tr></thead>
+            <tbody>
+              <tr><td class="key">Diagnostic</td><td class="num">$2.5k&ndash;5k</td><td>A mapped process, quantified gap, and architecture</td><td>Qualifies budget, funds discovery, becomes the quote</td></tr>
+              <tr><td class="key">Build sprint</td><td class="num">$15k&ndash;45k</td><td>One workflow in production against acceptance criteria</td><td>The core revenue event</td></tr>
+              <tr><td class="key">Operate</td><td class="num">$3k&ndash;12k/mo</td><td>Monitoring, fixes, iteration, added volume</td><td>Predictable revenue and the upsell surface</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="footer-line">Each tier exists to do a specific job in the pipeline &mdash; not to vary by hours worked.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>This is the backbone offer ladder every later pricing conversation refers back to. The Diagnostic is deliberately paid, not free &mdash; it both qualifies and funds the next step.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="13">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">2.1 continued</span></div>
+      <h2 class="headline">Pricing math and productization</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>One-metric-moved rule: if you cannot name the single number the engagement moves, you cannot price it.</li>
+          <li>Value arithmetic: annualized value = labor hours saved &times; loaded rate + error cost avoided + revenue unlocked.</li>
+          <li>Price at 10&ndash;20% of year-one value; refuse anything below 3.5&times; your delivery cost.</li>
+          <li>Productize: fixed scope, fixed price, fixed timeline, plus a written change-order protocol &mdash; the three constraints that make delivery repeatable.</li>
+          <li>Paid diagnostic beats free audit: it converts at 60&ndash;80% into a build, proves budget exists, and the client pays you to produce the document you quote from.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The 3.5&times; delivery-cost floor is a hard refusal line, not a negotiating opener &mdash; below it, margin erodes faster than volume can compensate.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="14">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">2.2</span></div>
+      <h2 class="headline">The TRACE discovery call: a call that prices itself</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li><strong>T &mdash; Trigger:</strong> why this, why now, what changed. No trigger means no deal, regardless of interest.</li>
+          <li><strong>R &mdash; Reality:</strong> map the current process live on a shared screen, six steps maximum.</li>
+          <li><strong>A &mdash; Arithmetic:</strong> volume &times; handling time &times; loaded rate, plus error and rework cost &mdash; stated out loud by the prospect.</li>
+          <li><strong>C &mdash; Consequence:</strong> the twelve-month cost of doing nothing, in their own words and figures.</li>
+          <li><strong>E &mdash; Entry:</strong> decision process, economic buyer, budget range, timeline, and what else is competing for the money.</li>
+          <li>Never quote on call one &mdash; the 48-hour architecture gap buys the room to price correctly.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Forty verbatim quantification questions and a range-anchor script for asking about budget without flinching or apologizing are provided in SOP 2.3. Multi-stakeholder mapping matters here: economic buyer, technical blocker, end-user champion &mdash; identify which one is actually on the call. When asked "just ballpark it for me," the answer is still: send the architecture in 48 hours, not a number today.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-chips" data-index="15">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">2.3</span></div>
+      <h2 class="headline">Objection handling: the enterprise eight</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="chip-grid">
+          <div class="obj-chip"><span class="n">1</span><span>&ldquo;We can build this in-house.&rdquo;</span></div>
+          <div class="obj-chip"><span class="n">2</span><span>&ldquo;ChatGPT already does this for twenty dollars a month.&rdquo;</span></div>
+          <div class="obj-chip"><span class="n">3</span><span>&ldquo;That's more than we expected to spend.&rdquo;</span></div>
+          <div class="obj-chip"><span class="n">4</span><span>&ldquo;Legal and security will never approve sending our data out.&rdquo;</span></div>
+          <div class="obj-chip"><span class="n">5</span><span>&ldquo;What happens when it hallucinates?&rdquo;</span></div>
+          <div class="obj-chip"><span class="n">6</span><span>&ldquo;Our data isn't clean enough yet.&rdquo;</span></div>
+          <div class="obj-chip"><span class="n">7</span><span>&ldquo;Just send me a proposal.&rdquo; <em>(the brush-off)</em></span></div>
+          <div class="obj-chip"><span class="n">8</span><span>&ldquo;I need to run it past the team.&rdquo;</span></div>
+        </div>
+        <p class="footer-line">Each gets the same treatment: the fear underneath it, the reframe script, and the specific proof asset you deploy.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Risk-reversal structures that cost nothing to offer: pilot gate, milestone billing, a written accuracy SLA, and client-owned IP. Disqualification: four red flags predict non-payment, and there is a specific script for ending a call early without burning the relationship &mdash; use it rather than chasing a bad-fit deal.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="16">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">2.4</span></div>
+      <h2 class="headline">Proposals and the closing presentation</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>One-page proposal: their words, their numbers, three options, one explicit recommendation &mdash; anything longer reads as padding.</li>
+          <li>Closing call: present the architecture and the arithmetic, then the price. Then the silence after the number &mdash; and what happens when you fill it.</li>
+          <li>Good / better / best framing with the middle option deliberately engineered to win, and decoy pricing done honestly.</li>
+          <li>Terms that protect margin: 50% up front, net-0 on milestones, written scope boundary, kill fee, client-delay clause, auto-renewing maintenance.</li>
+          <li>Post-proposal follow-up: five touches over eleven days, then a close-the-loop message that gets a decision either way.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Do not speak first after stating the price &mdash; the instinct to fill silence with a discount is the single most common self-inflicted margin loss in this call.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-sops" data-index="17">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">SOPs &amp; deliverables</span></div>
+      <h2 class="headline">Handed out this session</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="sop-list">
+          <div class="sop-row"><span class="sop-code">SOP 2.1</span><span class="sop-name">Offer Architecture Canvas</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 2.2</span><span class="sop-name">Value Pricing Calculator</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 2.3</span><span class="sop-name">TRACE Discovery Script</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 2.4</span><span class="sop-name">Objection Response Library</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 2.5</span><span class="sop-name">One-Page Proposal Template + closing deck</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 2.6</span><span class="sop-name">MSA, SOW &amp; change-order templates</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 2.7</span><span class="sop-name">Pipeline Board</span></div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>SOP 2.1</b> &mdash; three-tier ladder builder with 3 filled examples (ops, support, revenue).</p>
+      <p><b>SOP 2.2</b> &mdash; spreadsheet taking volume, loaded rate, and error cost to a price band and margin floor.</p>
+      <p><b>SOP 2.3</b> &mdash; annotated, with 40 quantification questions and the live process-mapping template.</p>
+      <p><b>SOP 2.4</b> &mdash; 8 objections &times; reframe script &times; matching proof asset.</p>
+      <p><b>SOP 2.5</b> &mdash; one-page proposal template plus a 12-slide closing deck.</p>
+      <p><b>SOP 2.6</b> &mdash; MSA, SOW, and change-order templates. Explicitly flagged as a drafting starting point, not legal advice &mdash; have counsel review before use.</p>
+      <p><b>SOP 2.7</b> &mdash; pipeline board with stage definitions, written exit criteria, and a follow-up cadence automation.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-assignment" data-index="18">
+    <div class="slide-inner">
+      <div class="kicker">Session 02 <span class="sep">&middot;</span> <span class="dim">Field assignment</span></div>
+      <h2 class="headline">Due before Session 03</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ol class="bullets">
+          <li>Run 3 discovery calls using the TRACE script. Record each and self-score against the provided rubric.</li>
+          <li>Price one real opportunity in SOP 2.2 and post your price band with the reasoning behind it.</li>
+          <li>Send 2 proposals using SOP 2.5.</li>
+          <li>Sell one paid diagnostic at $2,500 minimum.</li>
+          <li>Submit one call recording plus one proposal for live teardown in Session 03.</li>
+        </ol>
+        <span class="due-chip">Due: Mon Nov 16, 6:00pm &mdash; recording + proposal + priced calculator</span>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Session 03 opens with a live teardown of a submitted recording and proposal &mdash; same pattern as Session 02's opening, keep the pipeline honest.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================
+       SESSION 03 — Building & Delivering Systems for Clients
+       ============================================================ -->
+
+  <section class="slide slide-session-title" data-index="19">
+    <div class="slide-inner">
+      <div class="rail-col">
+        <span class="snum">03</span>
+        <span class="sdate">Tue &middot; Nov 17</span>
+        <span class="stag">Deliver<br>Pipeline + handoff</span>
+      </div>
+      <div class="session-main">
+        <h3>Building &amp; Delivering Systems for Clients</h3>
+        <p class="focus">Replacing one-off heroics with a standardized build-and-handoff pipeline that a second person could run without you.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The point of this session is repeatability &mdash; a scaffold the student reuses on every future engagement, not a one-off architecture diagram.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="20">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">Objective &amp; target outcome</span></div>
+      <h2 class="headline">Turn a signed engagement into a repeatable production line</h2>
+      <div class="rule"></div>
+      <div class="deck-body obj-grid">
+        <ul class="bullets">
+          <li>One reference architecture you reuse every time.</li>
+          <li>A ten-day onboarding protocol.</li>
+          <li>Six modular build templates with eval sets.</li>
+          <li>A handoff pack that makes the maintenance agreement an obvious yes.</li>
+        </ul>
+        <div class="target-box">
+          <span class="label">Target outcome</span>
+          <ul class="bullets">
+            <li>One client system shipped end-to-end on the standard scaffold with a published accuracy number</li>
+            <li>A complete handoff pack</li>
+            <li>One maintenance agreement signed or formally rejected with a documented reason</li>
+          </ul>
+          <p class="prep-line"><b>Prep:</b> bring a sold engagement with a written SOW (or an internal process as the client); GitHub/GitLab, n8n, Supabase/Postgres, Sentry, Loom; starter scaffold cloned and booting &mdash; see notes.</p>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>Pre-session preparation in full.</b> Bring one sold engagement with a written SOW; if nothing is sold yet, bring an internal process of your own to use as the client. Accounts: GitHub or GitLab, an orchestrator (n8n self-hosted or cloud), Supabase or Postgres, Sentry or equivalent error tracking, and Loom.</p>
+      <p>Setup: clone the provided starter scaffold and confirm it boots locally &mdash; bring the error if it does not. Pre-read: the reference architecture document; map your chosen client workflow onto its six layers before the session, however wrong the first attempt is.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-table" data-index="21">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">3.1</span></div>
+      <h2 class="headline">The reference architecture: six layers you reuse every time</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Layer</th><th>Responsibility</th><th>Typical implementation</th></tr></thead>
+            <tbody>
+              <tr><td class="key">Ingest</td><td>Webhooks, email, file drops, polled APIs</td><td class="num">n8n &middot; route handlers</td></tr>
+              <tr><td class="key">Normalize</td><td>Schema validation, dedupe, idempotency keys</td><td class="num">Zod &middot; Postgres</td></tr>
+              <tr><td class="key">Reason</td><td>LLM calls, routing, tool use, structured output</td><td class="num">LiteLLM gateway</td></tr>
+              <tr><td class="key">Act</td><td>Writes back to the client's system of record</td><td class="num">Typed API clients</td></tr>
+              <tr><td class="key">Observe</td><td>Traces, cost per run, accuracy, alerting</td><td class="num">Sentry &middot; cost ledger</td></tr>
+              <tr><td class="key">Escalate</td><td>Human-in-the-loop queue for low-confidence cases</td><td class="num">Review UI &middot; Slack</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>This six-layer map is the single artifact students should be able to redraw from memory by the end of the cohort &mdash; it is the scaffold every future client engagement gets mapped onto before a line of code is written.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="22">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">3.1 continued</span></div>
+      <h2 class="headline">Orchestration choices and guardrails</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Choose orchestration honestly: n8n when the client needs to see and touch the workflow, application code when anything is stateful or regulated, Temporal when long-running retries and durability actually matter &mdash; picking the heaviest option by default is how projects die.</li>
+          <li>Idempotency, retry policy, and dead-letter queues &mdash; three mechanics behind most client-visible incidents.</li>
+          <li>A per-engagement eval harness: a 30-case golden set built before go-live, with the accuracy threshold written into the SOW as the acceptance gate.</li>
+          <li>Secrets, tenancy, and data boundaries: what you host, what stays in the client's infrastructure, and what never leaves it &mdash; this conversation is what Session 04 sells against.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Flag explicitly that the data-boundary conversation here is the seed of Session 04's entire local-deployment offer &mdash; students should start noting which clients flinch at this question.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="23">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">3.2</span></div>
+      <h2 class="headline">Onboarding protocol: the first ten days</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Ninety-minute kickoff agenda plus an access checklist naming who grants what by which date &mdash; access delays are the single largest cause of blown timelines.</li>
+          <li>Process discovery workshop: as-is map &rarr; to-be map &rarr; written acceptance criteria, signed before a line of code is written.</li>
+          <li>Communication contract: one shared channel, a standing 20-minute weekly call, and a written Friday update &mdash; no status meeting without a working screen.</li>
+          <li>The scope wall: what is included, what becomes a change order, who signs change orders, and what they cost.</li>
+          <li>Risk register and the client-caused-delay clause that moves your deadline when their access, data, or decisions slip.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The "no status meeting without a working screen" rule is a discipline check as much as a client-management tactic &mdash; it forces momentum rather than narration.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-cards" data-index="24">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">3.3</span></div>
+      <h2 class="headline">Modular build templates: stop starting from zero</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="card-grid">
+          <div class="tmpl-card"><h5>Document intake</h5><p>Extraction and classification from PDFs, email attachments, and scans.</p></div>
+          <div class="tmpl-card"><h5>Inbox triage</h5><p>Routing plus drafted replies with a human approval queue.</p></div>
+          <div class="tmpl-card"><h5>CRM hygiene</h5><p>Enrichment, dedupe, and field normalization on a schedule.</p></div>
+          <div class="tmpl-card"><h5>Report generation</h5><p>Scheduled narrative reports over a warehouse or database.</p></div>
+          <div class="tmpl-card"><h5>Internal RAG assistant</h5><p>Permissions-aware retrieval over the client's own documents.</p></div>
+          <div class="tmpl-card"><h5>Research agent</h5><p>Lead or account research writing structured output into the CRM.</p></div>
+        </div>
+        <p class="footer-line">Two-week sprint: days 1&ndash;3 skeleton plus one happy path, days 4&ndash;8 edge cases and failure handling, days 9&ndash;10 eval run and hardening. Demo working software every third day &mdash; momentum is a deliverable.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Each of the six repos ships with an env schema, exactly three configuration points, a golden eval set, and documented known failure modes &mdash; these six templates cover the large majority of what mid-market clients actually buy.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="25">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">3.4</span></div>
+      <h2 class="headline">Handoff, maintenance, and retention</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>The handoff pack: architecture diagram, operational runbook, five short Loom walkthroughs, admin credentials transfer, and documented rollback steps.</li>
+          <li>Two recorded training sessions &mdash; one for operators, one for admins &mdash; indexed so new staff can self-serve six months later.</li>
+          <li>Maintenance tiers: <em>monitor</em>, <em>monitor and fix</em>, <em>operate</em>. SLA per tier, and whether token and infrastructure costs are passed through or bundled &mdash; a decision Session 04 revisits with real numbers.</li>
+          <li>The 30/60/90 value review and the upsell map: the next workflow, more volume, more seats, or a local deployment.</li>
+          <li>Case study extraction at day 45, while the numbers are fresh and the champion still remembers the before state &mdash; referral ask script attached.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Day 45 is a deliberately chosen window &mdash; early enough that the champion still remembers the exact before-state numbers, late enough that the after-state is proven in production.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-sops" data-index="26">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">SOPs &amp; deliverables</span></div>
+      <h2 class="headline">Handed out this session</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="sop-list">
+          <div class="sop-row"><span class="sop-code">SOP 3.1</span><span class="sop-name">Reference Architecture diagram + decision tree</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 3.2</span><span class="sop-name">Starter repo &mdash; six-layer scaffold</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 3.3</span><span class="sop-name">Six modular build templates</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 3.4</span><span class="sop-name">Client Onboarding Kit</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 3.5</span><span class="sop-name">Handoff Pack Template</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 3.6</span><span class="sop-name">Maintenance Agreement + SLA matrix</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 3.7</span><span class="sop-name">30/60/90 Value Review deck</span></div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>SOP 3.1</b> &mdash; reference architecture diagram plus orchestration decision tree (n8n vs. application code vs. Temporal).</p>
+      <p><b>SOP 3.2</b> &mdash; six-layer scaffold with env schema, structured logging, HITL review queue, and eval runner.</p>
+      <p><b>SOP 3.3</b> &mdash; six modular build templates, each with a golden eval set and failure-mode notes.</p>
+      <p><b>SOP 3.4</b> &mdash; kickoff deck, access checklist, as-is/to-be workshop, acceptance criteria form.</p>
+      <p><b>SOP 3.5</b> &mdash; runbook skeleton, diagram template, Loom scripts, training agendas.</p>
+      <p><b>SOP 3.6</b> &mdash; maintenance agreement, SLA matrix, and pass-through cost schedule.</p>
+      <p><b>SOP 3.7</b> &mdash; 30/60/90 value review deck and upsell decision map.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-assignment" data-index="27">
+    <div class="slide-inner">
+      <div class="kicker">Session 03 <span class="sep">&middot;</span> <span class="dim">Field assignment</span></div>
+      <h2 class="headline">Due before Session 04</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ol class="bullets">
+          <li>Deliver one working system &mdash; real client or your own internal process &mdash; built on the SOP 3.2 scaffold.</li>
+          <li>Produce a complete handoff pack with at least 3 Loom walkthroughs.</li>
+          <li>Run your golden eval set and publish the accuracy number, including the cases it fails.</li>
+          <li>Present the maintenance agreement to one client. Return with a signature or a written objection.</li>
+          <li>Port one workload candidate for Session 04: pick the highest-volume, lowest-reasoning task you now run on a frontier API.</li>
+        </ol>
+        <span class="due-chip">Due: Mon Nov 23, 6:00pm &mdash; repo link + handoff pack + accuracy number</span>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Nov 23&ndash;27 is a build week, not a class week &mdash; Session 04 lands the following Monday, Nov 30, giving students the Thanksgiving week to actually execute this assignment without a competing live session.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================
+       SESSION 04 — Local LLMs & Infrastructure Cost Control
+       ============================================================ -->
+
+  <section class="slide slide-session-title" data-index="28">
+    <div class="slide-inner">
+      <div class="rail-col">
+        <span class="snum">04</span>
+        <span class="sdate">Mon &middot; Nov 30</span>
+        <span class="stag">Margin<br>Local inference</span>
+      </div>
+      <div class="session-main">
+        <h3>Local LLMs &amp; Infrastructure Cost Control</h3>
+        <p class="focus">Self-hosting open-weight models to cut token spend, and packaging local deployment as a high-margin offer for buyers whose compliance team already blocked the cloud.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>This session re-prices Session 03's delivery cost from the infrastructure up &mdash; it only works because students enter it with real billing data and a real shipped system from Session 03.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="29">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">Objective &amp; target outcome</span></div>
+      <h2 class="headline">Stand up a working local inference stack</h2>
+      <div class="rule"></div>
+      <div class="deck-body obj-grid">
+        <ul class="bullets">
+          <li>Prove its economics against your own billing data instead of a vendor's benchmark.</li>
+          <li>Route traffic hybrid so cheap work stops hitting frontier pricing.</li>
+          <li>Turn the whole capability into a three-tier offer aimed at compliance-constrained buyers.</li>
+        </ul>
+        <div class="target-box">
+          <span class="label">Target outcome</span>
+          <ul class="bullets">
+            <li>A deployed stack serving one real Session 03 workload</li>
+            <li>Published accuracy and cost delta against your cloud baseline</li>
+            <li>A completed TCO model naming your breakeven token volume</li>
+            <li>One local-deployment proposal sent at $25k or above, plus a managed-hosting retainer</li>
+          </ul>
+          <p class="prep-line"><b>Prep:</b> 16GB+ VRAM card or Apple Silicon 32GB+, or cloud GPU with $25+ credit; Docker + NVIDIA Container Toolkit, or Ollama natively on macOS; 30 days of billing CSVs per provider &mdash; see notes.</p>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>Pre-session preparation in full.</b> Hardware, either path works: a machine with 16GB+ VRAM (RTX 4090/5090, A6000) or Apple Silicon with 32GB+ unified memory; or a cloud GPU account (RunPod, Lambda, Vast.ai) with at least $25 in credit. Nobody is blocked by hardware.</p>
+      <p>Install: Docker plus the NVIDIA Container Toolkit on Linux/Windows, or Ollama natively on macOS &mdash; verify the install before the session. Data: export the last 30 days of API billing from every provider used, as CSV, broken out by model if available &mdash; this is the raw input for the student's own cost model.</p>
+      <p>Pre-read: the quantization and VRAM primer (provided), and the TCO worksheet with the student's own token volumes already entered.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-table" data-index="30">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">4.1</span></div>
+      <h2 class="headline">The local stack: what to run and why</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Component</th><th>Use it when</th><th>Avoid it when</th></tr></thead>
+            <tbody>
+              <tr><td class="key">Ollama</td><td>Development, single-user, edge boxes, fast iteration</td><td>Many concurrent users</td></tr>
+              <tr><td class="key">vLLM / SGLang</td><td>Concurrency and throughput; continuous batching</td><td>One developer on a laptop</td></tr>
+              <tr><td class="key">llama.cpp</td><td>CPU-only or memory-constrained hardware</td><td>Latency-sensitive, high volume</td></tr>
+              <tr><td class="key">LiteLLM</td><td>OpenAI-compatible gateway so client code never changes</td><td>Never &mdash; this is the seam</td></tr>
+              <tr><td class="key">Open WebUI</td><td>A client-facing chat surface staff will actually use</td><td>Programmatic-only workloads</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>LiteLLM's "avoid it when: never" is deliberate &mdash; it is the seam that keeps client application code unchanged regardless of which model sits behind it, so it belongs in every stack.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="31">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">4.1 continued</span></div>
+      <h2 class="headline">Model choice and sizing</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Model selection by job, not by leaderboard: small instruct models for classification, extraction, and routing; mid-size for drafting; frontier cloud for genuinely hard reasoning. The goal is a router, not a replacement.</li>
+          <li>Quantization tradeoffs across fp16, 8-bit, and 4-bit, measured on your eval set rather than assumed.</li>
+          <li>VRAM sizing arithmetic: parameters &times; bytes-per-parameter + KV cache + overhead, feeding the model-to-card matrix.</li>
+          <li>Context and KV-cache math, batching, and why throughput collapses at long context if you size for parameters alone.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Push students away from benchmark worship here &mdash; the only quantization decision that matters is the one validated on their own golden eval set, not a published leaderboard number.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="32">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">4.2</span></div>
+      <h2 class="headline">The economics: build the model, not the narrative</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Honest token accounting: cost per million in and out, cache-hit rates, retries, and the agent fan-out multiplier that quietly makes real usage 3&ndash;8&times; your estimate.</li>
+          <li>Self-hosting TCO in full: GPU capex or hourly rate, power, cooling, redundancy, idle time, and your own operations hours.</li>
+          <li>Breakeven analysis across owned GPU, hourly cloud GPU, and frontier API, as a function of monthly token volume and utilization rate.</li>
+          <li><strong>Where local wins:</strong> high-volume classification and extraction, PII- or PHI-bound workloads, predictable always-on batch processing, offline and air-gapped environments.</li>
+          <li><strong>Where local loses:</strong> spiky low volume, frontier-level reasoning, very small teams, and anything needing state-of-the-art code generation.</li>
+          <li>Hybrid routing: cascade cheap to expensive behind confidence gates, instrumented to report measured savings, not projected ones.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Saying "where local loses" out loud in front of a buyer is what makes the rest of the pitch credible &mdash; a self-hosting pitch that omits the operations-hours line of the TCO is the one students must not write.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="33">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">4.3</span></div>
+      <h2 class="headline">Local RAG and agents for enterprise</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Stack: Postgres with pgvector or Qdrant, a local embedding model, metadata-aware chunking, and a reranker.</li>
+          <li>Permissions-aware retrieval &mdash; the requirement that kills most enterprise pilots after the demo. Document-level ACLs enforced at query time, not filtered after.</li>
+          <li>Agent patterns on smaller local models: tool-calling reliability, enforced structured output, guardrails, and confidence-triggered fallback to a cloud model.</li>
+          <li>Evaluation and drift: run the same Session 03 golden set against local and cloud, then publish the delta to the client rather than hiding it.</li>
+          <li>Deployment shapes: on-premise box, the client's VPC, or your managed GPU &mdash; each with its own backups, model updates, monitoring, and GPU-level alerting.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>Permissions-aware retrieval is the line item most pilots skip and the one that kills enterprise deals post-demo &mdash; enforce ACLs at query time, never as a post-filter.</p>
+    </aside>
+  </section>
+
+  <section class="slide" data-index="34">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">4.4</span></div>
+      <h2 class="headline">Productizing privacy and cost control as an offer</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ul class="bullets">
+          <li>Two buying triggers, and they are not technical: compliance pressure (PHI, PII, HIPAA, GDPR, data residency, no-training clauses) and a runaway API bill someone in finance has started asking about.</li>
+          <li>Offer construction: Local AI Assessment at $5k&ndash;10k &rarr; Deployment at $25k&ndash;75k &rarr; Managed Hosting at $4k&ndash;15k/month.</li>
+          <li>Savings-share pitch usually loses to fixed fee plus retainer &mdash; attribution disputes, measurement arguments, capped upside.</li>
+          <li>Surviving security review: data-flow diagram, model provenance, dependency inventory, and a no-egress attestation you can actually defend.</li>
+          <li>Who to sell to: healthcare, legal, financial services, defense-adjacent manufacturing, EU data residency cases, and any firm whose CISO has already blocked public chat tools.</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The three-tier offer mirrors Session 02's ladder deliberately &mdash; same architecture, re-priced around infrastructure and compliance instead of workflow automation.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-sops" data-index="35">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">SOPs &amp; deliverables</span></div>
+      <h2 class="headline">Handed out this session</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <div class="sop-list">
+          <div class="sop-row"><span class="sop-code">SOP 4.1</span><span class="sop-name">Local Stack install scripts</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 4.2</span><span class="sop-name">Hardware Sizing Sheet</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 4.3</span><span class="sop-name">TCO &amp; Breakeven Calculator</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 4.4</span><span class="sop-name">Hybrid Router Config</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 4.5</span><span class="sop-name">Local RAG reference repo</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 4.6</span><span class="sop-name">Local Deployment Offer Kit</span></div>
+          <div class="sop-row"><span class="sop-code">SOP 4.7</span><span class="sop-name">Procurement one-pager</span></div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p><b>SOP 4.1</b> &mdash; <code>docker-compose</code> for Ollama/vLLM + LiteLLM gateway + Open WebUI + Postgres/pgvector + Caddy TLS.</p>
+      <p><b>SOP 4.2</b> &mdash; VRAM calculator, model-to-card matrix, current cloud GPU price table.</p>
+      <p><b>SOP 4.3</b> &mdash; your token volumes against owned GPU, hourly GPU, and API pricing over 36 months.</p>
+      <p><b>SOP 4.4</b> &mdash; LiteLLM routing rules, confidence cascade, and a cost-logging dashboard.</p>
+      <p><b>SOP 4.5</b> &mdash; permissions-aware retrieval, reranker, eval runner.</p>
+      <p><b>SOP 4.6</b> &mdash; assessment SOW, deployment SOW, managed hosting agreement.</p>
+      <p><b>SOP 4.7</b> &mdash; data-flow diagram template, model provenance sheet, no-egress attestation, security questionnaire answer bank.</p>
+    </aside>
+  </section>
+
+  <section class="slide slide-assignment" data-index="36">
+    <div class="slide-inner">
+      <div class="kicker">Session 04 <span class="sep">&middot;</span> <span class="dim">Final field assignment</span></div>
+      <h2 class="headline">Due at graduation</h2>
+      <div class="rule"></div>
+      <div class="deck-body">
+        <ol class="bullets">
+          <li>Deploy the stack and serve one real Session 03 workload through it end to end.</li>
+          <li>Run your golden eval set on local and cloud. Publish both the accuracy delta and the cost delta.</li>
+          <li>Complete SOP 4.3 with your real billing numbers and state your breakeven token volume as a single figure.</li>
+          <li>Identify 10 compliance-triggered prospects and send 10 local-assessment outreach messages using the Session 01 system.</li>
+          <li>Send one local-deployment proposal and present the cost model to a real buyer.</li>
+          <li><strong>Graduation artifact:</strong> one page showing your full loop &mdash; leads in, calls held, deals closed, systems delivered, and margin per engagement.</li>
+        </ol>
+        <span class="due-chip">Due: Mon Dec 7, 6:00pm &mdash; stack proof, cost model, proposal, and loop one-pager</span>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>The graduation one-pager is the whole point of the cohort made visible on a single page &mdash; it should read as a closed loop, not a list of four disconnected assignments.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================
+       37. CLOSING — the loop end to end
+       ============================================================ -->
+  <section class="slide" data-index="37">
+    <div class="slide-inner">
+      <div class="kicker">Graduation</div>
+      <h2 class="headline">The loop, end to end</h2>
+      <div class="rule"></div>
+      <div class="deck-body loop-chain">
+        <div class="loop-row"><span class="n">01</span><p><b>Content &amp; outreach</b> fills the top of funnel &mdash; profile, five formats, four-touch DMs &mdash; and books qualification calls.</p></div>
+        <div class="loop-row"><span class="n">02</span><p><b>Pricing &amp; sales</b> turns those calls into signed engagements &mdash; a three-tier ladder, the TRACE call, objection handling, a one-page proposal.</p></div>
+        <div class="loop-row"><span class="n">03</span><p><b>Delivery</b> ships those engagements on a reusable six-layer scaffold with a published accuracy number, a handoff pack, and a maintenance agreement.</p></div>
+        <div class="loop-row"><span class="n">04</span><p><b>Local infrastructure</b> re-prices that delivery cost from the bottom of the stack &mdash; cutting token spend, proving the economics on real billing data, and selling a compliance-grade offer back into the funnel Session 01 built.</p></div>
+        <div class="loop-row"><span class="n">&#8734;</span><p>The graduation artifact closes the loop on one page: leads in, calls held, deals closed, systems delivered, margin per engagement.</p></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <span class="notes-label">Speaker notes</span>
+      <p>This is deliberately the last slide and nothing else &mdash; the course does not end on a sales pitch for a next cohort, it ends on the student's own loop, proven with their own numbers across four weeks.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="chrome">
+  <button class="navbtn prev" type="button" aria-label="Previous slide">&#8592;</button>
+  <button class="navbtn next" type="button" aria-label="Next slide">&#8594;</button>
+  <div class="counter" id="counter" aria-live="polite">1 / 38</div>
+</div>
+
+<div class="hint" id="hint">
+  <kbd>&#8594;</kbd> / <kbd>space</kbd> advance &middot; <kbd>&#8592;</kbd> back &middot; <kbd>Home</kbd>/<kbd>End</kbd> jump &middot; <kbd>n</kbd> notes &middot; click left/right half
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var total = slides.length;
+  var current = 0;
+
+  var counterEl = document.getElementById("counter");
+  var deckEl = document.getElementById("deck");
+  var prevBtn = document.querySelector(".navbtn.prev");
+  var nextBtn = document.querySelector(".navbtn.next");
+  var hintEl = document.getElementById("hint");
+
+  function render() {
+    for (var i = 0; i < total; i++) {
+      slides[i].classList.toggle("is-active", i === current);
+    }
+    counterEl.textContent = (current + 1) + " / " + total;
+  }
+
+  function goTo(index) {
+    if (index < 0) index = 0;
+    if (index > total - 1) index = total - 1;
+    if (index === current) return;
+    current = index;
+    render();
+  }
+
+  function next() { goTo(current + 1); }
+  function prev() { goTo(current - 1); }
+
+  prevBtn.addEventListener("click", function (e) { e.stopPropagation(); prev(); });
+  nextBtn.addEventListener("click", function (e) { e.stopPropagation(); next(); });
+
+  // Click left/right half of the screen to navigate.
+  deckEl.addEventListener("click", function (e) {
+    if (e.target.closest(".navbtn")) return;
+    var w = window.innerWidth;
+    if (e.clientX > w / 2) { next(); } else { prev(); }
+  });
+
+  window.addEventListener("keydown", function (e) {
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+      case " ":
+      case "Spacebar":
+      case "PageDown":
+        e.preventDefault();
+        next();
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+      case "PageUp":
+        e.preventDefault();
+        prev();
+        break;
+      case "Home":
+        e.preventDefault();
+        goTo(0);
+        break;
+      case "End":
+        e.preventDefault();
+        goTo(total - 1);
+        break;
+      case "n":
+      case "N":
+        document.body.classList.toggle("show-notes");
+        break;
+      default:
+        break;
+    }
+  });
+
+  // First-slide hint: fades after a few seconds.
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var hintTimer = setTimeout(function () {
+    if (reduceMotion) {
+      hintEl.style.display = "none";
+    } else {
+      hintEl.classList.add("hint-out");
+    }
+  }, 4500);
+
+  hintEl.addEventListener("transitionend", function () {
+    hintEl.style.display = "none";
+  });
+
+  render();
+  deckEl.focus();
+})();
+</script>
+
+</body>
+</html>

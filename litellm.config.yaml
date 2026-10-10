@@ -30,7 +30,7 @@ model_list:
 
 litellm_settings:
   drop_params: true
-  # Per-request cost is written to Loop Engine's own action log, which is the
+  # Per-request cost is written to Vibe Then Build's own action log, which is the
   # table the margin report reads. The gateway's logging is redundant here.
   success_callback: []
 
@@ -38,7 +38,7 @@ general_settings:
   # Without a master key, anything that can reach port 4000 can call this
   # gateway and spend whatever cloud key is configured above, with no
   # authentication at all. LITELLM_MASTER_KEY must be set in the environment
-  # (see .env.example) to a random value, and Loop Engine's own
+  # (see .env.example) to a random value, and Vibe Then Build's own
   # LLM_GATEWAY_KEY must be set to that exact same value, because
   # src/lib/ai/router.ts sends LLM_GATEWAY_KEY as the bearer token on every
   # request to this gateway.
