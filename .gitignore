@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+.env.local
+dist/
+*.log
+.DS_Store
+drizzle/meta/
+ollama-data/
+pgdata/
+tsconfig.tsbuildinfo
+next-env.d.ts

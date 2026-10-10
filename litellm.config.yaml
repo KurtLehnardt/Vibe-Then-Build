@@ -1,0 +1,35 @@
+# Inference gateway. Local models are listed first and are the defaults.
+#
+# The gateway exists so that nothing in the application knows which provider
+# served a request. Swapping a local model for a frontier one, or back, is a
+# configuration change here and nowhere else.
+
+model_list:
+  - model_name: ollama/qwen3:14b
+    litellm_params:
+      model: ollama/qwen3:14b
+      api_base: http://ollama:11434
+
+  - model_name: ollama/qwen3:4b
+    litellm_params:
+      model: ollama/qwen3:4b
+      api_base: http://ollama:11434
+
+  - model_name: ollama/nomic-embed-text
+    litellm_params:
+      model: ollama/nomic-embed-text
+      api_base: http://ollama:11434
+
+  # Optional escalation for genuinely hard reasoning. Requires a key in the
+  # environment; with no key set, hard jobs fall back to the local drafting
+  # model and the fallback is recorded in the action log.
+  - model_name: claude-opus-5
+    litellm_params:
+      model: anthropic/claude-opus-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+litellm_settings:
+  drop_params: true
+  # Per-request cost is written to Loop Engine's own action log, which is the
+  # table the margin report reads. The gateway's logging is redundant here.
+  success_callback: []

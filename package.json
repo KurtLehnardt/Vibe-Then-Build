@@ -1,0 +1,40 @@
+{
+  "name": "loop-engine",
+  "version": "0.0.1",
+  "private": false,
+  "license": "AGPL-3.0-or-later",
+  "description": "Operator cockpit for an AI consulting practice: brand, content, outreach, pipeline, delivery, and local-model margin tracking. Self-hosted, policy-gated, free to run on Ollama.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "seed": "tsx scripts/seed.ts",
+    "preflight": "tsx scripts/preflight.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.2",
+    "next": "^15.5.4",
+    "pg": "^8.13.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "drizzle-kit": "^0.31.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
