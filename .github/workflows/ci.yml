@@ -1,13 +1,27 @@
 name: CI
 
-# Run on every push and on every pull request targeting main, so a branch
-# gets feedback as it is pushed and the PR gets a final check against the
-# latest main before merge.
+# Every pull request is checked regardless of what it targets, and main is
+# checked again after a merge.
+#
+# The pull_request trigger deliberately carries no branch filter. With
+# `branches: [main]` a stacked pull request — one whose base is another feature
+# branch rather than main — matched nothing and ran no checks at all, so it
+# appeared green on a page that had never tested it. Silently skipped CI is
+# worse than no CI, because the absence looks like a pass.
+#
+# push stays limited to main on purpose. Opening a pull request from a branch in
+# this repository already triggers the pull_request event, so running on every
+# branch push as well would double every run for no extra signal.
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+
+# A new push to a pull request makes the previous run's answer obsolete, so the
+# superseded run is cancelled rather than left to finish and report late.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   # next build loads the full module graph (including src/db/index.ts) even
