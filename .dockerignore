@@ -1,0 +1,16 @@
+# Keeps the build context small and keeps secrets and large local-only data
+# out of the image. Without this file, `COPY . .` in the Dockerfile sweeps in
+# the Postgres data directory and the Ollama model weights (multi-gigabyte),
+# plus node_modules, build caches, and anything in .env.
+
+node_modules
+.next
+.git
+pgdata
+ollama-data
+.env
+.env.local
+*.log
+npm-debug.log*
+.DS_Store
+tsconfig.tsbuildinfo

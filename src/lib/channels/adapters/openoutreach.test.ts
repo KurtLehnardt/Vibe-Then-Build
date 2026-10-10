@@ -13,7 +13,13 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdapterConfigError } from "../types";
 import { UnterminatedQuoteError } from "./csv";
-import { MAX_CSV_BYTES, configFromEnv, createOpenOutreachAdapter, parseLeads } from "./openoutreach";
+import {
+  MAX_CSV_BYTES,
+  configFromEnv,
+  createOpenOutreachAdapter,
+  parseLeads,
+  resolveMaxCsvBytes,
+} from "./openoutreach";
 
 // F5 mutant #2 (mtime tie-break `>` -> `>=`): reverses whatever order the
 // real readdir returns, so the tie-break test below cannot pass merely
@@ -413,17 +419,33 @@ describe("createOpenOutreachAdapter", () => {
 
   describe("F4: oversized export is refused unread", () => {
     it("returns no leads when the latest CSV exceeds the size cap", async () => {
-      // F5 mutant #3: the previous fixture here was 64 MB of `a` with no
-      // newline, which parses to a header row and zero leads whether the
-      // cap exists or not — `toEqual([])` passed either way, so this test
-      // never actually exercised the cap. This fixture's row would import a
-      // lead if read, so the empty result here is only explained by the cap.
-      const oversized = join(dir, "huge.csv");
-      writeFileSync(oversized, csvOfExactSize(MAX_CSV_BYTES + 1));
+      // The fixture's row would import a lead if the file were read, so an
+      // empty result here is explained only by the cap. The cap is lowered
+      // for the test rather than building a 64 MB file: between the string,
+      // its UTF-16 representation and the parsed rows, a real one costs over
+      // a gigabyte of heap and exhausts a standard CI runner — and it would
+      // be testing the constant rather than the logic.
+      const body = csvOfExactSize(512);
+      writeFileSync(join(dir, "huge.csv"), body);
 
+      const adapter = createOpenOutreachAdapter({
+        exportDir: dir,
+        maxCsvBytes: Buffer.byteLength(body, "utf-8") - 1,
+      });
+      expect(await adapter.fetchLeads?.(10)).toEqual([]);
+    });
+
+    it("applies the shipped 64 MB default when no cap is configured", async () => {
+      // The configurable cap must not quietly become unlimited by default.
+      writeCsv("ok.csv", "name\nJane Doe\n");
       const adapter = createOpenOutreachAdapter({ exportDir: dir });
-      const leads = await adapter.fetchLeads?.(10);
-      expect(leads).toEqual([]);
+      expect(await adapter.fetchLeads?.(10)).toHaveLength(1);
+
+      // Asserting the resolution, not just the constant: a default that
+      // quietly became unlimited would still read this small file happily.
+      expect(resolveMaxCsvBytes({ exportDir: dir })).toBe(MAX_CSV_BYTES);
+      expect(MAX_CSV_BYTES).toBe(64 * 1024 * 1024);
+      expect(resolveMaxCsvBytes({ exportDir: dir, maxCsvBytes: 99 })).toBe(99);
     });
 
     it("still reads a CSV at or under the size cap", async () => {
@@ -434,13 +456,14 @@ describe("createOpenOutreachAdapter", () => {
     });
 
     it("still reads a CSV whose size is exactly at the cap (boundary, not vacuous)", async () => {
-      // F5 mutant #3's other half: `>` becoming `>=` at the boundary check
-      // only shows up at exactly MAX_CSV_BYTES, not comfortably under it.
-      const atCap = csvOfExactSize(MAX_CSV_BYTES);
-      expect(Buffer.byteLength(atCap, "utf-8")).toBe(MAX_CSV_BYTES);
+      // `>` becoming `>=` at the boundary check only shows up at exactly the
+      // cap, not comfortably under it.
+      const atCap = csvOfExactSize(512);
+      const size = Buffer.byteLength(atCap, "utf-8");
+      expect(size).toBe(512);
       writeFileSync(join(dir, "at-cap.csv"), atCap);
 
-      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      const adapter = createOpenOutreachAdapter({ exportDir: dir, maxCsvBytes: size });
       const leads = await adapter.fetchLeads?.(10);
       expect(leads).toHaveLength(1);
       expect(leads?.[0]?.name).toBe("Jane Doe");
@@ -466,13 +489,17 @@ describe("createOpenOutreachAdapter", () => {
 
     it("reports unreachable for an oversized export, naming the file and the cap", async () => {
       const oversized = join(dir, "huge.csv");
-      writeFileSync(oversized, csvOfExactSize(MAX_CSV_BYTES + 1));
-      const adapter = createOpenOutreachAdapter({ exportDir: dir });
+      const body = csvOfExactSize(2 * 1024 * 1024);
+      writeFileSync(oversized, body);
+      const adapter = createOpenOutreachAdapter({
+        exportDir: dir,
+        maxCsvBytes: 1024 * 1024,
+      });
 
       const health = await adapter.health();
       expect(health.reachable).toBe(false);
       expect(health.detail).toContain(oversized);
-      expect(health.detail).toContain("64 MB");
+      expect(health.detail).toContain("1 MB");
 
       const leads = await adapter.fetchLeads?.(10);
       expect(leads).toEqual([]);

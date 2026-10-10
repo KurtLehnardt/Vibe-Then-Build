@@ -1,0 +1,76 @@
+name: CI
+
+# Run on every push and on every pull request targeting main, so a branch
+# gets feedback as it is pushed and the PR gets a final check against the
+# latest main before merge.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  # next build loads the full module graph (including src/db/index.ts) even
+  # though every page under src/app is `force-dynamic` and only touches the
+  # database at request time. A missing DATABASE_URL makes that module throw
+  # the moment it is evaluated, so a syntactically valid but never-dialed
+  # connection string is supplied here purely to satisfy that import-time
+  # read. Nothing in this job ever opens a socket to this address.
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci_unused
+
+jobs:
+  build:
+    name: Typecheck, test, lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm must be on PATH before actions/setup-node's pnpm cache mode can
+      # find it (it shells out to `pnpm store path`), so this step runs
+      # first and does not itself specify a Node version.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      # --frozen-lockfile fails the build instead of silently rewriting
+      # pnpm-lock.yaml, which is what we want in CI: a lockfile that has
+      # drifted from package.json is a bug to fix in the PR, not to paper
+      # over at install time.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm lint
+      - run: pnpm build
+
+  audit:
+    name: Dependency audit (non-blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # This job is intentionally separate from `build` and allowed to fail,
+      # rather than gating on a severity threshold, because two of the
+      # current advisories are transitive and have no non-breaking fix at
+      # all: esbuild is pinned to 0.18.20 inside the deprecated
+      # @esbuild-kit/core-utils package that drizzle-kit still depends on
+      # (that package is end-of-life, merged into tsx, and will not receive
+      # another release), and postcss 8.4.31 is vendored inside next itself
+      # rather than resolved from our own dependency range. A severity
+      # threshold set high enough to pass today would also hide a future,
+      # genuinely fixable advisory at that same severity, and a threshold
+      # that blocks on these would wedge every PR permanently. Running it
+      # as its own non-blocking job keeps the report visible on every run
+      # without turning an unfixable transitive finding into a standing CI
+      # outage.
+      - run: pnpm audit
+        continue-on-error: true

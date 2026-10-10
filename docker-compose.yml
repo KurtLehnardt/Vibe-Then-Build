@@ -7,6 +7,22 @@
 # Nothing here calls a paid API. The whole loop runs on your machine.
 
 services:
+  # Every `ports:` binding below is pinned to 127.0.0.1 (loopback) on purpose.
+  # Docker's short port syntax (e.g. "5432:5432") binds 0.0.0.0 by default,
+  # which publishes the service on every network interface — on a shared
+  # office network, a coworking space, or a café Wi-Fi, that makes Postgres
+  # (default creds loop/loop), Ollama (no auth), the LiteLLM gateway, and the
+  # app itself reachable by anyone else on that network. If a frontier API key
+  # is configured, a stranger who can reach the gateway can spend it.
+  #
+  # If you genuinely need LAN access (e.g. reaching the app from another
+  # machine on your own trusted network), you must do two things, not one:
+  # (1) change the binding below from 127.0.0.1:<port> to the specific LAN
+  # interface or 0.0.0.0, and (2) add authentication in front of whatever you
+  # exposed first — a reverse proxy with its own auth for the app and
+  # Postgres, and a real LITELLM_MASTER_KEY (see litellm.config.yaml and
+  # .env.example) for the gateway. Changing only the binding re-opens exactly
+  # the hole described above.
   db:
     image: postgres:17-alpine
     environment:
@@ -16,7 +32,7 @@ services:
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U loop -d loop_engine"]
       interval: 5s
@@ -24,11 +40,13 @@ services:
       retries: 10
 
   ollama:
-    image: ollama/ollama:latest
+    # Pinned deliberately (not :latest), so two operators building this file
+    # months apart get the same software. Bump this as its own visible change.
+    image: ollama/ollama:0.40.2
     volumes:
       - ./ollama-data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     # Uncomment on a machine with an NVIDIA GPU and the container toolkit.
     # deploy:
     #   resources:
@@ -39,15 +57,22 @@ services:
     #           capabilities: [gpu]
 
   gateway:
-    image: ghcr.io/berriai/litellm:main-latest
+    # Pinned deliberately (not :main-latest), so two operators building this
+    # file months apart get the same software. Bump this as its own visible change.
+    image: ghcr.io/berriai/litellm:main-v1.83.14-stable
     command: ["--config", "/app/litellm.config.yaml", "--port", "4000"]
     volumes:
       - ./litellm.config.yaml:/app/litellm.config.yaml:ro
     environment:
       # Optional. Leave unset to stay fully local.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Required. litellm.config.yaml wires this in as general_settings.master_key,
+      # so the gateway rejects any request without it as a bearer token. Must be
+      # set in .env to the same value as the app's LLM_GATEWAY_KEY below -- see
+      # .env.example for how to generate one.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY in .env (openssl rand -hex 32), matching LLM_GATEWAY_KEY. See .env.example.}
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     depends_on:
       - ollama
 
@@ -56,11 +81,16 @@ services:
     environment:
       DATABASE_URL: postgresql://loop:loop@db:5432/loop_engine
       LLM_GATEWAY_URL: http://gateway:4000
-      LLM_GATEWAY_KEY: sk-local-no-secret
+      # Must equal the gateway's LITELLM_MASTER_KEY above -- see .env.example.
+      LLM_GATEWAY_KEY: ${LLM_GATEWAY_KEY:?Set LLM_GATEWAY_KEY in .env (openssl rand -hex 32), matching LITELLM_MASTER_KEY. See .env.example.}
       LOOP_KILL_SWITCH: ${LOOP_KILL_SWITCH:-false}
       OPERATOR_TZ: ${OPERATOR_TZ:-UTC}
+      # Optional. Leave unset to stay fully local; see .env.example. Without
+      # these, jobs marked "hard" fall back to the local drafting model.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MODEL_HARD: ${MODEL_HARD:-}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       db:
         condition: service_healthy
@@ -79,7 +109,8 @@ services:
   # key comes from Postiz Settings -> Public API once Postiz is running).
   #
   # postiz:
-  #   image: ghcr.io/gitroomhq/postiz-app:latest
+  #   # Pinned deliberately (not :latest); bump as its own visible change.
+  #   image: ghcr.io/gitroomhq/postiz-app:v2.25.0
   #   environment:
   #     DATABASE_URL: postgresql://postiz:postiz@postiz-db:5432/postiz
   #     REDIS_URL: redis://postiz-redis:6379
@@ -88,7 +119,7 @@ services:
   #     NEXT_PUBLIC_BACKEND_URL: http://localhost:5000/api
   #     BACKEND_INTERNAL_URL: http://localhost:5000
   #   ports:
-  #     - "5000:5000"
+  #     - "127.0.0.1:5000:5000"
   #   depends_on:
   #     - postiz-db
   #     - postiz-redis

@@ -29,6 +29,19 @@ import { parseCsv } from "./csv";
 export interface OpenOutreachConfig {
   /** Directory OpenOutreach exports its lead CSVs into. */
   exportDir: string;
+  /**
+   * Largest export this adapter will read, in bytes. Defaults to
+   * MAX_CSV_BYTES.
+   *
+   * Configurable for two reasons. An operator whose exports legitimately run
+   * larger can raise it knowingly rather than patching the source, and tests
+   * can exercise the cap with a file of a few hundred bytes. Proving the
+   * boundary with a real 64 MB fixture costs well over a gigabyte of heap once
+   * the string, its UTF-16 copy and the parsed rows coexist, which is enough
+   * to fail on a standard CI runner — and it would be testing the constant
+   * rather than the logic.
+   */
+  maxCsvBytes?: number;
 }
 
 const ENV_VAR = "OPENOUTREACH_EXPORT_DIR";
@@ -42,7 +55,21 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): OpenOutreac
       `Set ${ENV_VAR} to the directory OpenOutreach writes its exported lead CSVs into (its export output path).`,
     );
   }
-  return { exportDir };
+  const rawCap = env.OPENOUTREACH_MAX_CSV_BYTES;
+  if (rawCap === undefined || rawCap.trim() === "") return { exportDir };
+
+  // A malformed cap is refused rather than silently defaulted: an operator who
+  // set it meant something by it, and quietly ignoring the value would read as
+  // the cap being in force when it is not.
+  const parsed = Number(rawCap.trim());
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new AdapterConfigError(
+      "openoutreach",
+      "OPENOUTREACH_MAX_CSV_BYTES",
+      `It must be a positive whole number of bytes, but it is set to "${rawCap}".`,
+    );
+  }
+  return { exportDir, maxCsvBytes: parsed };
 }
 
 const CAPABILITIES: AdapterCapabilities = {
@@ -247,7 +274,7 @@ type CsvInspection =
  * eliminated. Never reads a file it is about to refuse for size: the size
  * check runs on the `stat` result before any `readFile` call.
  */
-async function inspectLatestCsv(dir: string): Promise<CsvInspection> {
+async function inspectLatestCsv(dir: string, maxBytes: number): Promise<CsvInspection> {
   const latest = await mostRecentCsv(dir);
   if (latest === null) return { kind: "missing" };
 
@@ -260,7 +287,7 @@ async function inspectLatestCsv(dir: string): Promise<CsvInspection> {
     return { kind: "missing" };
   }
 
-  if (info.size > MAX_CSV_BYTES) {
+  if (info.size > maxBytes) {
     return { kind: "oversized", path: latest, sizeBytes: info.size };
   }
 
@@ -283,8 +310,21 @@ async function inspectLatestCsv(dir: string): Promise<CsvInspection> {
   }
 }
 
+/**
+ * Resolves the effective size cap for a configuration.
+ *
+ * Exported so a test can assert that omitting `maxCsvBytes` really falls back
+ * to MAX_CSV_BYTES. Proving that through the adapter would need a file larger
+ * than the 64 MB default, which is the very fixture this indirection exists to
+ * avoid building.
+ */
+export function resolveMaxCsvBytes(config: OpenOutreachConfig): number {
+  return config.maxCsvBytes ?? MAX_CSV_BYTES;
+}
+
 export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelAdapter {
   const cfg = config ?? configFromEnv();
+  const maxBytes = resolveMaxCsvBytes(cfg);
 
   return {
     id: "openoutreach",
@@ -303,7 +343,7 @@ export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelA
         };
       }
 
-      const inspection = await inspectLatestCsv(cfg.exportDir);
+      const inspection = await inspectLatestCsv(cfg.exportDir, maxBytes);
       switch (inspection.kind) {
         case "missing":
           return {
@@ -313,7 +353,7 @@ export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelA
               `Run OpenOutreach's export step to produce one before fetching leads.`,
           };
         case "oversized": {
-          const capMb = MAX_CSV_BYTES / (1024 * 1024);
+          const capMb = maxBytes / (1024 * 1024);
           const actualMb = Math.ceil(inspection.sizeBytes / (1024 * 1024));
           return {
             reachable: false,
@@ -345,7 +385,7 @@ export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelA
       // A streaming parser would read arbitrarily large exports safely;
       // that is more machinery than this adapter needs until an export
       // actually gets this big.
-      const inspection = await inspectLatestCsv(cfg.exportDir);
+      const inspection = await inspectLatestCsv(cfg.exportDir, maxBytes);
       if (inspection.kind !== "ok") {
         // Covers "missing", "oversized", and "truncated" alike: none of
         // them has usable rows to build leads from, and fetchLeads must not

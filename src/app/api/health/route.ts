@@ -8,7 +8,13 @@ export async function GET() {
     await db.execute(sql`select 1`);
     checks.database = "ok";
   } catch (e) {
-    checks.database = `unreachable: ${(e as Error).message}`;
+    // This endpoint is unauthenticated, so the caller gets a fixed status
+    // only. The real error can carry a connection string, host name, or
+    // schema detail, and goes to the server log instead. `e` is not
+    // guaranteed to be an Error — a thrown non-Error value would itself
+    // throw on `.message` — so it is logged as-is rather than cast.
+    console.error("Health check: database query failed.", e);
+    checks.database = "unreachable";
   }
 
   const gateway = process.env.LLM_GATEWAY_URL ?? "http://localhost:4000";

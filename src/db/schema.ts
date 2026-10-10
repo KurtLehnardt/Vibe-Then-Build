@@ -100,18 +100,27 @@ export const operators = pgTable("operators", {
 
 /* ------------------------------------------------------------- brand core */
 
-export const brandProfiles = pgTable("brand_profiles", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  operatorId: uuid("operator_id").notNull().references(() => operators.id, { onDelete: "cascade" }),
-  wedgeStatement: text("wedge_statement"),
-  icpIndustry: text("icp_industry"),
-  icpRole: text("icp_role"),
-  icpPain: text("icp_pain"),
-  // The expensive-problem test: annualized cost of the pain, in dollars.
-  painAnnualCostUsd: numeric("pain_annual_cost_usd", { precision: 12, scale: 2 }),
-  notes: text("notes"),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const brandProfiles = pgTable(
+  "brand_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    operatorId: uuid("operator_id")
+      .notNull()
+      .references(() => operators.id, { onDelete: "cascade" }),
+    wedgeStatement: text("wedge_statement"),
+    icpIndustry: text("icp_industry"),
+    icpRole: text("icp_role"),
+    icpPain: text("icp_pain"),
+    // The expensive-problem test: annualized cost of the pain, in dollars.
+    painAnnualCostUsd: numeric("pain_annual_cost_usd", { precision: 12, scale: 2 }),
+    notes: text("notes"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // One brand profile per operator. Without this, seed's onConflictDoNothing()
+  // has no conflict target to act on, and seeding twice inserts a second
+  // profile that pages silently pick between with .limit(1).
+  (t) => [uniqueIndex("brand_profiles_operator_idx").on(t.operatorId)],
+);
 
 export const proofItems = pgTable("proof_items", {
   id: uuid("id").primaryKey().defaultRandom(),

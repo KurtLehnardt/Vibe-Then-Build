@@ -56,9 +56,13 @@ raise it. This build does not.
 | `bid.submit` | 0 | 2 | A bid is a priced commitment. |
 | `research.enrich` | 3 | 3 | Reads only; nothing reaches a person. |
 
-Every evaluation — allowed, deferred, or blocked — is written to `action_log` with its reason and
-its model cost. That table is the source of truth for the margin report, so there is no separate
-place where "what the system did" and "what it cost" can disagree.
+The policy engine, model router, cost ledger, and the `action_log` schema are implemented and
+tested as the designed path for this: every evaluation — allowed, deferred, or blocked — is meant
+to be written to `action_log` with its reason and its model cost, and that table is meant to be the
+source of truth for the margin report. **None of that is wired up yet.** Nothing outside the test
+suite currently calls `evaluate()`, the router, or the ledger, and nothing writes to `action_log`.
+Writing to it lands with the sequence runner, in a later P1 slice. Until then this is a tested
+design, not a running safety property — do not rely on the action log existing today.
 
 Guardrails that apply on top of the level: daily caps per action, quiet hours, an ICP score floor,
 a suppression list, and a global kill switch that overrides everything.
@@ -70,8 +74,24 @@ Requires Docker and Node 22+.
 ```bash
 git clone <your-fork> loop-engine && cd loop-engine
 cp .env.example .env
+```
 
-docker compose up -d                 # postgres, ollama, litellm gateway, app
+Before starting anything, generate a gateway key and paste it into **both** `LLM_GATEWAY_KEY` and
+`LITELLM_MASTER_KEY` in `.env` — they must be the exact same value, and the gateway refuses to
+start without one:
+
+```bash
+openssl rand -hex 32
+```
+
+From here there are two ways to run the stack. Pick one; both put the app on port 3000, so running
+them together fails.
+
+**Development (recommended)** — infrastructure in Docker, the app on the host, so you get hot reload
+and don't have to rebuild a container on every change:
+
+```bash
+docker compose up -d db ollama gateway
 docker compose exec ollama ollama pull qwen3:14b
 docker compose exec ollama ollama pull qwen3:4b
 docker compose exec ollama ollama pull nomic-embed-text
@@ -81,6 +101,21 @@ pnpm db:migrate
 pnpm seed                            # one operator, conservative policies
 pnpm preflight                       # tells you exactly what is still missing
 pnpm dev                             # http://localhost:3000
+```
+
+**Everything in Docker** — no local Node install needed; the app runs in its own container instead
+of on the host:
+
+```bash
+docker compose up -d                 # postgres, ollama, litellm gateway, app
+docker compose exec ollama ollama pull qwen3:14b
+docker compose exec ollama ollama pull qwen3:4b
+docker compose exec ollama ollama pull nomic-embed-text
+
+docker compose exec app pnpm db:migrate
+docker compose exec app pnpm seed       # one operator, conservative policies
+docker compose exec app pnpm preflight  # tells you exactly what is still missing
+# the app service is already running: http://localhost:3000
 ```
 
 A fresh install has every outbound action at level 0 or 1, so nothing can send until you choose to

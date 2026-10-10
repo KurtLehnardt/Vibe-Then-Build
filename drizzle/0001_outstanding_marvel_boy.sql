@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "brand_profiles_operator_idx" ON "brand_profiles" USING btree ("operator_id");

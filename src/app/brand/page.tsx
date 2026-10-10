@@ -11,9 +11,10 @@ export default async function BrandPage() {
     <main>
       <h1>Brand core</h1>
       <p className="lede">
-        The positioning wedge, the ICP record every lead is scored against, and the proof library
-        drafting is allowed to cite. Unverified proof may be drafted around but is never presented
-        as a number.
+        The positioning wedge, the ICP record leads are meant to be scored against, and the proof
+        library drafting is designed to cite. Scoring and drafting are implemented as library code
+        with no caller wired to either yet, so nothing here is scored or drafted automatically
+        today — see the Roadmap.
       </p>
 
       <h2>Wedge</h2>
@@ -47,7 +48,8 @@ export default async function BrandPage() {
       <h2>Proof library</h2>
       {proof.length === 0 ? (
         <div className="notice">
-          No proof recorded. Drafting will decline to cite numbers until something is here.
+          No proof recorded. Drafting is not wired up yet; once it is, it is designed to decline
+          citing numbers until something is here.
         </div>
       ) : (
         <div className="scroll">
@@ -77,8 +79,8 @@ export default async function BrandPage() {
       <h2>Voice model</h2>
       <div className="notice">
         {samples.length === 0
-          ? "No posts imported. Drafting will write plainly until a corpus exists."
-          : "Voice examples imported. Drafts select the highest-engagement samples as few-shot examples."}
+          ? "No posts imported. Drafting is not wired up yet; once it is, it is designed to write plainly until a corpus exists."
+          : "Voice examples imported. Drafting is not wired up yet; once it is, it is designed to select the highest-engagement samples as few-shot examples."}
       </div>
     </main>
   );

@@ -26,7 +26,7 @@ describe("rateFor", () => {
     expect(rateFor("ollama", { ollama: { inPerMillion: 9, outPerMillion: 9 } })).toEqual(LOCAL_RATE);
   });
 
-  it("falls back to zero for an unknown provider rather than guessing", () => {
-    expect(rateFor("anthropic", {})).toEqual(LOCAL_RATE);
+  it("throws for a paid provider with no configured rate, rather than pricing it at zero", () => {
+    expect(() => rateFor("anthropic", {})).toThrow(/anthropic/i);
   });
 });
