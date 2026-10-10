@@ -76,4 +76,52 @@ describe("parseCsv", () => {
       expect(parseCsv('ab"c,d"e')).toEqual([['ab"c', 'd"e']]);
     });
   });
+
+  describe("F1: leading UTF-8 BOM", () => {
+    it("strips a BOM before an unquoted header so the header still matches", () => {
+      expect(parseCsv("﻿name,email\nJane Doe,jane@acme.com\n")).toEqual([
+        ["name", "email"],
+        ["Jane Doe", "jane@acme.com"],
+      ]);
+    });
+
+    it("strips a BOM before a quoted header, which a trim() alone cannot do once the BOM has already made the quote a literal character", () => {
+      // Excel's "CSV UTF-8" export and Python's `csv.QUOTE_ALL` with
+      // `encoding="utf-8-sig"` both produce exactly this shape: a BOM
+      // immediately followed by a quoted header row. Before this fix, the
+      // BOM counted as the field's first character, so the header's opening
+      // quote read as a literal character instead of opening a quoted
+      // section, and the header field came out as `"name"` (quotes
+      // retained) rather than `name`.
+      expect(parseCsv('﻿"name","email"\r\n"Jane Doe","jane@acme.com"\r\n')).toEqual([
+        ["name", "email"],
+        ["Jane Doe", "jane@acme.com"],
+      ]);
+    });
+  });
+
+  describe("F2: horizontal whitespace before an opening quote", () => {
+    it("lets a space between a comma and a quote still open a quoted field", () => {
+      // Before this fix, the space set `fieldStarted`, so the quote right
+      // after it was read as a literal character (F7's rule) instead of
+      // opening the field. That split the still-open multi-line quoted
+      // value across an extra row and fabricated a bogus row out of its
+      // second line.
+      expect(parseCsv('name, reason\nAda, "likes apples\nand pears"\nBob, "fine"\n')).toEqual([
+        ["name", " reason"],
+        ["Ada", "likes apples\nand pears"],
+        ["Bob", "fine"],
+      ]);
+    });
+
+    it("still treats a tab before a quote the same way", () => {
+      expect(parseCsv('a,\t"b,c"\n')).toEqual([["a", "b,c"]]);
+    });
+
+    it("keeps a mid-field quote literal even though leading whitespace before a quote is now tolerated", () => {
+      // Regression guard for F7 alongside the F2 fix: real content (not
+      // whitespace) before the quote must still make it a literal character.
+      expect(parseCsv('ab"c,d"e')).toEqual([['ab"c', 'd"e']]);
+    });
+  });
 });

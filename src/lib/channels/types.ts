@@ -101,17 +101,6 @@ export interface ChannelAdapter {
   fetchLeads?(limit: number): Promise<InboundLead[]>;
 }
 
-/** Thrown when an adapter is handed an action it does not declare support for. */
-export class UnsupportedActionError extends Error {
-  constructor(adapter: ChannelId, actionType: ActionType, supported: readonly ActionType[]) {
-    super(
-      `Adapter "${adapter}" does not support action "${actionType}". ` +
-        `It supports: ${supported.join(", ") || "nothing"}.`,
-    );
-    this.name = "UnsupportedActionError";
-  }
-}
-
 /** Thrown when required configuration is missing, naming the env var to set. */
 export class AdapterConfigError extends Error {
   constructor(adapter: ChannelId, missing: string, hint: string) {

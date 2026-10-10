@@ -7,7 +7,7 @@ import {
   UnknownAdapterError,
 } from "./registry";
 import type { ActionType } from "../policy/levels";
-import type { ChannelAdapter, ChannelId, SendMode } from "./types";
+import type { ChannelAdapter, ChannelId, HealthReport, SendMode } from "./types";
 
 function env(over: Record<string, string> = {}): NodeJS.ProcessEnv {
   return { NODE_ENV: "test", ...over } as NodeJS.ProcessEnv;
@@ -29,7 +29,7 @@ function stubAdapter(opts: {
   mode?: SendMode;
   withSend?: boolean;
   withFetchLeads?: boolean;
-  health?: () => Promise<{ reachable: boolean; detail: string }>;
+  health?: () => Promise<HealthReport>;
 }): ChannelAdapter {
   const adapter: ChannelAdapter = {
     id: opts.id,
@@ -43,14 +43,10 @@ function stubAdapter(opts: {
     health: opts.health ?? (async () => ({ reachable: true, detail: "Stub is healthy." })),
   };
 
-  if (opts.withSend !== false && (opts.mode ?? "api") !== "inbound") {
-    adapter.send = async () => ({
-      status: "sent",
-      externalId: `${opts.id}-1`,
-      sentAt: new Date("2026-01-01T00:00:00Z"),
-    });
-  }
-  if (opts.withSend === true) {
+  // A sender by default, an inbound source by default, and either overridable:
+  // the point of these stubs is that each guard can be falsified independently.
+  const wantsSend = opts.withSend ?? (opts.mode ?? "api") !== "inbound";
+  if (wantsSend) {
     adapter.send = async () => ({
       status: "sent",
       externalId: `${opts.id}-1`,
@@ -220,6 +216,30 @@ describe("health", () => {
     const broken = reports.find((x) => x.id === "openoutreach")?.report;
     expect(broken?.reachable).toBe(false);
     expect(broken?.detail).toContain("ENOENT: dangling symlink");
+  });
+
+  it.each([
+    ["a string", "boom"],
+    ["undefined", undefined],
+    ["null", null],
+  ])("survives an adapter that throws %s rather than an Error", async (_label, thrown) => {
+    // Anything can be thrown in JavaScript. Reading `.message` off a thrown
+    // `undefined` would itself throw, out of the very catch meant to contain it.
+    const r = registryOf([
+      stubAdapter({
+        id: "openoutreach",
+        mode: "inbound",
+        health: async () => {
+          throw thrown;
+        },
+      }),
+      stubAdapter({ id: "postiz", actions: ["linkedin.post"] }),
+    ]);
+
+    const reports = await r.health();
+    expect(reports).toHaveLength(2);
+    expect(reports.find((x) => x.id === "postiz")?.report.reachable).toBe(true);
+    expect(reports.find((x) => x.id === "openoutreach")?.report.reachable).toBe(false);
   });
 
   it("times out an adapter that never answers instead of hanging the whole check", async () => {

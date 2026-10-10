@@ -23,6 +23,7 @@ import type {
   InboundLead,
 } from "../types";
 import { AdapterConfigError } from "../types";
+import type { CsvRow } from "./csv";
 import { parseCsv } from "./csv";
 
 export interface OpenOutreachConfig {
@@ -97,9 +98,13 @@ function toScore(v: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Parses OpenOutreach CSV text into leads, stopping once `limit` is reached. */
-export function parseLeads(csvText: string, limit: number): InboundLead[] {
-  const rows = parseCsv(csvText);
+/**
+ * Builds leads from already-parsed CSV rows, stopping once `limit` is
+ * reached. Split out from `parseLeads` so a caller that has already parsed
+ * the text once (`health()`'s gate check, below) does not have to parse it
+ * again just to build the leads.
+ */
+function leadsFromRows(rows: CsvRow[], limit: number): InboundLead[] {
   if (rows.length === 0) return [];
 
   const headerRow = rows[0] ?? [];
@@ -137,6 +142,11 @@ export function parseLeads(csvText: string, limit: number): InboundLead[] {
   return leads;
 }
 
+/** Parses OpenOutreach CSV text into leads, stopping once `limit` is reached. */
+export function parseLeads(csvText: string, limit: number): InboundLead[] {
+  return leadsFromRows(parseCsv(csvText), limit);
+}
+
 // A lead export is a small structured table: even a generous export of tens
 // of thousands of rows lands well under a few MB. 64 MiB leaves a wide
 // margin for an unusually verbose export while staying far short of what
@@ -149,13 +159,26 @@ export const MAX_CSV_BYTES = 64 * 1024 * 1024;
  * Returns the full path of the most recently modified .csv in `dir`, or null
  * if none exists or the directory can't be read.
  *
- * Only considers entries `readdir` itself reports as regular files. That is
- * doing real security and correctness work, not just tidiness:
- * `withFileTypes` + `d.isFile()` is false for a symlink entry (so a dangling
- * symlink never reaches `stat`, and a symlink pointing outside `dir` is never
- * read as a lead export) and false for a subdirectory that happens to be
- * named `*.csv` (so it never reaches `readFile` and throws EISDIR). `dir` is
- * written by a separate process, so both are real, not hypothetical.
+ * Candidates are selected by name (a case-insensitive `.csv` suffix) and
+ * then filtered on the `stat` result (`info.isFile()`), not on the
+ * `readdir` dirent's own type bit. The dirent filter (`d.isFile()`) was
+ * tried first and failed two real export layouts: it is false for every
+ * symlink entry regardless of what the symlink resolves to, and a stable
+ * `latest.csv` symlink pointing at a timestamped export file is an
+ * extremely common layout; and on filesystems where `d_type` is not
+ * available (several network mounts, some XFS configurations), `readdir`
+ * reports `UV_DIRENT_UNKNOWN` and `d.isFile()` is false even for perfectly
+ * ordinary files, silently hiding every CSV in the directory. `stat`
+ * resolves the symlink and answers the actual question instead of relying
+ * on a type bit that is sometimes unavailable.
+ *
+ * This does not guarantee the file never lives outside `dir`: `dir` itself
+ * can be a symlink that `readdir` follows, and a hardlink passes
+ * `info.isFile()` the same as any other regular file either way. What it
+ * does guarantee is narrower and still worth having: a dangling symlink is
+ * excluded, because `stat` throws on it and the per-entry guard below skips
+ * it, and a subdirectory that happens to be named `*.csv` is excluded,
+ * because `stat` reports it as not a file.
  */
 async function mostRecentCsv(dir: string): Promise<string | null> {
   let entries: Dirent[];
@@ -165,21 +188,28 @@ async function mostRecentCsv(dir: string): Promise<string | null> {
     return null;
   }
 
-  const csvFiles = entries.filter((d) => d.isFile() && d.name.toLowerCase().endsWith(".csv"));
-  if (csvFiles.length === 0) return null;
+  const candidates = entries.filter((d) => d.name.toLowerCase().endsWith(".csv"));
 
   let newestName: string | null = null;
   let newestMtimeMs = -Infinity;
-  for (const d of csvFiles) {
+  for (const d of candidates) {
     const full = join(dir, d.name);
     let info: Awaited<ReturnType<typeof stat>>;
     try {
       info = await stat(full);
     } catch {
-      // The entry existed when readdir ran but is gone or unreadable now
-      // (e.g. a race with the writer process). Skip it rather than letting
-      // the rejection escape — health() and fetchLeads() both promise never
-      // to reject for a filesystem reason.
+      // The entry existed when readdir ran but is gone, unreadable, or a
+      // dangling symlink now (e.g. a race with the writer process, or a
+      // symlink target that was removed). Skip it rather than letting the
+      // rejection escape — health() and fetchLeads() both promise never to
+      // reject for a filesystem reason.
+      continue;
+    }
+    if (!info.isFile()) {
+      // Excludes a subdirectory named `*.csv` (e.g. an "archive.csv"
+      // directory some export layouts use) and anything else `stat` does
+      // not consider a regular file, now decided from the resolved file
+      // itself rather than from the dirent's possibly-missing type bit.
       continue;
     }
     if (
@@ -197,6 +227,60 @@ async function mostRecentCsv(dir: string): Promise<string | null> {
     }
   }
   return newestName === null ? null : join(dir, newestName);
+}
+
+type CsvInspection =
+  | { kind: "missing" }
+  | { kind: "oversized"; path: string; sizeBytes: number }
+  | { kind: "truncated"; path: string }
+  | { kind: "ok"; path: string; rows: CsvRow[] };
+
+/**
+ * Looks at the most recently modified CSV in `dir` and applies the same
+ * gates `fetchLeads` applies before importing it: the 64 MB size cap, and a
+ * parse check that the file does not end inside a quoted field (a
+ * truncated export). `health()` and `fetchLeads()` both call this, so they
+ * can never again disagree about whether a given export is usable —
+ * previously `health()` only checked that *some* .csv file existed, so it
+ * could report reachable for an export `fetchLeads` would refuse outright,
+ * which is exactly the drift `docs/integrations.md` describes as
+ * eliminated. Never reads a file it is about to refuse for size: the size
+ * check runs on the `stat` result before any `readFile` call.
+ */
+async function inspectLatestCsv(dir: string): Promise<CsvInspection> {
+  const latest = await mostRecentCsv(dir);
+  if (latest === null) return { kind: "missing" };
+
+  let info: Awaited<ReturnType<typeof stat>>;
+  try {
+    info = await stat(latest);
+  } catch {
+    // Selected by mostRecentCsv a moment ago but gone now (a race with the
+    // writer process). Nothing to read this round.
+    return { kind: "missing" };
+  }
+
+  if (info.size > MAX_CSV_BYTES) {
+    return { kind: "oversized", path: latest, sizeBytes: info.size };
+  }
+
+  let text: string;
+  try {
+    text = await readFile(latest, "utf-8");
+  } catch {
+    // Permissions changed or the file was removed since stat(). Treated the
+    // same as "no usable export this round" rather than a hard failure.
+    return { kind: "missing" };
+  }
+
+  try {
+    return { kind: "ok", path: latest, rows: parseCsv(text) };
+  } catch {
+    // parseCsv throws when the file ends inside a quoted field — a
+    // truncated export, most likely because OpenOutreach's writer process
+    // was killed or crashed mid-write.
+    return { kind: "truncated", path: latest };
+  }
 }
 
 export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelAdapter {
@@ -219,62 +303,57 @@ export function createOpenOutreachAdapter(config?: OpenOutreachConfig): ChannelA
         };
       }
 
-      const latest = await mostRecentCsv(cfg.exportDir);
-      if (latest === null) {
-        return {
-          reachable: false,
-          detail:
-            `${cfg.exportDir} exists but contains no .csv files. ` +
-            `Run OpenOutreach's export step to produce one before fetching leads.`,
-        };
+      const inspection = await inspectLatestCsv(cfg.exportDir);
+      switch (inspection.kind) {
+        case "missing":
+          return {
+            reachable: false,
+            detail:
+              `${cfg.exportDir} exists but contains no .csv files. ` +
+              `Run OpenOutreach's export step to produce one before fetching leads.`,
+          };
+        case "oversized": {
+          const capMb = MAX_CSV_BYTES / (1024 * 1024);
+          const actualMb = Math.ceil(inspection.sizeBytes / (1024 * 1024));
+          return {
+            reachable: false,
+            detail:
+              `${inspection.path} is ${actualMb} MB, over the ${capMb} MB cap, and ` +
+              `fetchLeads will refuse to read it. Export a smaller batch from ` +
+              `OpenOutreach, or split this file, before fetching leads.`,
+          };
+        }
+        case "truncated":
+          return {
+            reachable: false,
+            detail:
+              `${inspection.path} is truncated: it ends inside a quoted field, ` +
+              `most likely because OpenOutreach's export process was killed or ` +
+              `crashed mid-write. Rerun its export step to produce a complete ` +
+              `file before fetching leads.`,
+          };
+        case "ok":
+          return { reachable: true, detail: `Most recent export: ${inspection.path}.` };
       }
-
-      return { reachable: true, detail: `Most recent export: ${latest}.` };
     },
 
     async fetchLeads(limit: number): Promise<InboundLead[]> {
-      const latest = await mostRecentCsv(cfg.exportDir);
-      if (latest === null) return [];
-
-      let info: Awaited<ReturnType<typeof stat>>;
-      try {
-        info = await stat(latest);
-      } catch {
-        // Selected by mostRecentCsv a moment ago but gone now. Nothing to
-        // read this round.
+      // `limit` only bounds how many leads come *out*; parseCsv still has to
+      // materialize the entire row matrix to get there, and readFile would
+      // have to hold the whole file as a string first. A file over the cap
+      // is refused unread rather than risking an OOM of the Next.js process.
+      // A streaming parser would read arbitrarily large exports safely;
+      // that is more machinery than this adapter needs until an export
+      // actually gets this big.
+      const inspection = await inspectLatestCsv(cfg.exportDir);
+      if (inspection.kind !== "ok") {
+        // Covers "missing", "oversized", and "truncated" alike: none of
+        // them has usable rows to build leads from, and fetchLeads must not
+        // reject for a filesystem or parse reason, so an empty list is the
+        // documented "nothing to report this round" state for all three.
         return [];
       }
-
-      if (info.size > MAX_CSV_BYTES) {
-        // `limit` only bounds how many leads come *out*; parseCsv still has
-        // to materialize the entire row matrix to get there, and readFile
-        // would have to hold the whole file as a string first. A file left
-        // over this cap is refused unread rather than risking an OOM of the
-        // Next.js process. A streaming parser would read arbitrarily large
-        // exports safely; that is more machinery than this adapter needs
-        // until an export actually gets this big.
-        return [];
-      }
-
-      let text: string;
-      try {
-        text = await readFile(latest, "utf-8");
-      } catch {
-        // Permissions changed or the file was removed since stat(). An
-        // empty list is the documented "nothing to report this round"
-        // state; fetchLeads must not reject for a filesystem reason.
-        return [];
-      }
-
-      try {
-        return parseLeads(text, limit);
-      } catch {
-        // parseCsv throws when the file ends inside a quoted field — a
-        // truncated export. Importing whatever partial data it produced
-        // before hitting the end would be worse than reporting none, so
-        // this is treated the same as "no usable export this round."
-        return [];
-      }
+      return leadsFromRows(inspection.rows, limit);
     },
   };
 }

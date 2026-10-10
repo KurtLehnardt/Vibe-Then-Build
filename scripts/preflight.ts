@@ -98,24 +98,40 @@ const checks: Array<{ name: string; run: () => Promise<CheckResult> }> = [
 // pass/fail thresholds. Asking the registry means there is exactly one
 // implementation of "is this integration healthy," and preflight and the
 // running system always agree on the answer.
-const registry = buildRegistry(process.env);
+//
+// Building the registry and collecting its reports is wrapped because preflight
+// is the tool an operator reaches for when something is already wrong. A bug in
+// an adapter's constructor must not answer that with a stack trace and no check
+// list: the Postgres and gateway results are exactly what the operator came for,
+// and they are still worth printing when an integration cannot even be built.
+try {
+  const registry = buildRegistry(process.env);
 
-for (const unavailable of registry.unavailable) {
+  for (const unavailable of registry.unavailable) {
+    checks.push({
+      name: `${labelFor(unavailable.id)} reachable`,
+      run: async () => skip(unavailable.reason),
+    });
+  }
+
+  // One registry.health() call covers every available adapter, including the
+  // per-adapter timeout the registry itself enforces — preflight does not
+  // re-implement that, either.
+  const healthReports = await registry.health();
+
+  for (const { id, report } of healthReports) {
+    checks.push({
+      name: `${labelFor(id)} reachable`,
+      run: async () => (report.reachable ? null : report.detail),
+    });
+  }
+} catch (e) {
+  const detail = e instanceof Error ? e.message : String(e);
   checks.push({
-    name: `${labelFor(unavailable.id)} reachable`,
-    run: async () => skip(unavailable.reason),
-  });
-}
-
-// One registry.health() call covers every available adapter, including the
-// per-adapter timeout the registry itself enforces — preflight does not
-// re-implement that, either.
-const healthReports = await registry.health();
-
-for (const { id, report } of healthReports) {
-  checks.push({
-    name: `${labelFor(id)} reachable`,
-    run: async () => (report.reachable ? null : report.detail),
+    name: "Integrations",
+    run: async () =>
+      `Could not inspect the configured integrations: ${detail}. ` +
+      `The checks above are still accurate; this is a defect in an adapter, not in your setup.`,
   });
 }
 

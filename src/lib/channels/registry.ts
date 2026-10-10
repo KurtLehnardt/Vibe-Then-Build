@@ -122,10 +122,14 @@ async function reportFor(adapter: ChannelAdapter): Promise<HealthReport> {
     ]);
   } catch (e) {
     // An adapter that throws from health() is a defect in that adapter, but it
-    // must not take the other adapters' reports down with it.
+    // must not take the other adapters' reports down with it. Anything at all
+    // can be thrown in JavaScript, so this must not assume an Error: reading
+    // `.message` off a thrown `undefined` would itself throw, which is exactly
+    // the failure this catch exists to prevent.
+    const detail = e instanceof Error ? e.message : String(e);
     return {
       reachable: false,
-      detail: `The ${adapter.id} adapter failed while reporting health: ${(e as Error).message}`,
+      detail: `The ${adapter.id} adapter failed while reporting health: ${detail}`,
     };
   } finally {
     clearTimeout(timer);

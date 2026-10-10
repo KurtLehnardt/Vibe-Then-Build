@@ -104,22 +104,65 @@ function truncate(text: string): string {
 }
 
 /**
- * Strips userinfo out of any URL appearing in free text.
+ * Strips credentials out of free text before it enters a reason or detail string.
  *
- * Redacting our own configured URL is not sufficient, because the text we
- * interpolate alongside it is not ours. A fetch failure against a URL that
- * carries credentials puts the whole credentialed URL into the error message,
- * so a password reaches the health detail by way of `error.message` rather
- * than by way of the URL we printed deliberately. Scrubbing at the boundary
- * where external text enters a message catches both paths, and any future one.
+ * Three rules, applied in order:
+ *
+ * 1. URL userinfo (`user:pass@`). Redacting our own configured URL is not sufficient,
+ *    because the text we interpolate alongside it is not ours. A fetch failure against
+ *    a URL that carries credentials puts the whole credentialed URL into the error
+ *    message, so a password reaches the health detail by way of `error.message` rather
+ *    than by way of the URL we printed deliberately.
+ * 2. Literal occurrences of the configured API key. This is the reliable rule, because
+ *    the exact string is known; every occurrence of it is replaced regardless of the
+ *    shape it is embedded in.
+ * 3. A query-parameter pattern (`?apiKey=...`, `&token=...`, `&access_token=...`,
+ *    `&authorization=...`). This is defense in depth for a credential that is not the
+ *    one configured here (a different caller's key, a one-time token upstream issued),
+ *    not a guarantee: a body that echoes a secret under some other shape still gets
+ *    through. The only real guarantee against an echoed secret is not forwarding the
+ *    body at all, which is why a 401/403 response is dropped entirely below instead of
+ *    being scrubbed.
  */
-function scrubCredentials(text: string): string {
-  return text.replace(/\/\/[^/\s@]+@/g, "//***@");
+function scrubCredentials(text: string, apiKey: string): string {
+  let scrubbed = text.replace(/\/\/[^/\s@]+@/g, "//***@");
+  if (apiKey) {
+    scrubbed = scrubbed.split(apiKey).join("***");
+  }
+  scrubbed = scrubbed.replace(
+    /([?&])(api[-_]?key|token|access_token|authorization)=[^&\s]+/gi,
+    "$1$2=***",
+  );
+  return scrubbed;
 }
 
-/** Every piece of text that originates outside this process passes through here. */
-function external(text: string): string {
-  return scrubCredentials(truncate(text));
+/**
+ * Builds the function every piece of text that originates outside this process passes
+ * through. A factory rather than a bare function because the literal-key rule in
+ * `scrubCredentials` needs the configured API key, and nothing module-level has access
+ * to it. Truncates after scrubbing, not before: truncating first can cut the text
+ * before the part the scrubber would have matched, letting a credential past the
+ * 500-character boundary survive in the slice that remains.
+ */
+function createExternalScrubber(apiKey: string): (text: string) => string {
+  return (text: string) => truncate(scrubCredentials(text, apiKey));
+}
+
+/** Upper bound for a parsed Retry-After, in seconds: one day. Node's `setTimeout`
+ * silently clamps any delay above INT32_MAX milliseconds (~24.8 days) down to 1ms
+ * instead of throwing, so an unbounded Retry-After does not fail safe — it produces
+ * exactly the hot immediate-retry loop the lower (non-negative) clamp exists to
+ * prevent, just reached from the top of the range instead of the bottom. Measured:
+ * `Retry-After: 2147484` (2,147,484s) fires a `setTimeout` after 0ms;
+ * `99999999999999999999` fires after 2ms; an HTTP-date of `Fri, 31 Dec 9999 23:59:59
+ * GMT` (~2.5e11s away) fires after 1ms. One day is generous for any legitimate
+ * Retry-After and well clear of the clamp threshold. */
+const MAX_RETRY_AFTER_SECONDS = 86_400;
+
+/** Clamps a parsed Retry-After to a non-negative whole number of seconds no greater
+ * than MAX_RETRY_AFTER_SECONDS. */
+function clampRetryAfterSeconds(seconds: number): number {
+  return Math.min(MAX_RETRY_AFTER_SECONDS, Math.max(0, Math.round(seconds)));
 }
 
 /**
@@ -127,17 +170,18 @@ function external(text: string): string {
  * (optionally surrounded by whitespace) — no sign, no decimal point, no hex. `Number()`
  * alone would also accept "-5", "1.75", and "0x20", none of which Retry-After's
  * seconds-form permits. Both the numeric and the HTTP-date branch finish by clamping to
- * a non-negative whole number of seconds, so the two branches agree on what they mean:
- * a negative or fractional value here reaches a caller's `setTimeout(seconds * 1000)`
- * directly, and a negative delay fires immediately into a hot retry loop against
- * whatever just rate-limited us.
+ * a non-negative whole number of seconds no greater than MAX_RETRY_AFTER_SECONDS, so the
+ * two branches agree on what they mean: a negative or fractional value here reaches a
+ * caller's `setTimeout(seconds * 1000)` directly, a negative delay fires immediately
+ * into a hot retry loop against whatever just rate-limited us, and an oversized one
+ * does too by way of Node's own setTimeout clamp (see MAX_RETRY_AFTER_SECONDS above).
  */
 function parseRetryAfterSeconds(headers: Headers): number | null {
   const raw = headers.get("retry-after");
   if (!raw) return null;
   const trimmed = raw.trim();
   if (/^\d+$/.test(trimmed)) {
-    return Math.max(0, Math.round(Number(trimmed)));
+    return clampRetryAfterSeconds(Number(trimmed));
   }
   // A value that looks like a number but is not a plain non-negative integer is
   // malformed, and malformed means "no guidance" rather than "retry immediately".
@@ -150,7 +194,7 @@ function parseRetryAfterSeconds(headers: Headers): number | null {
   const asDate = Date.parse(trimmed);
   if (!Number.isNaN(asDate)) {
     const deltaMs = asDate - Date.now();
-    return Math.max(0, Math.round(deltaMs / 1000));
+    return clampRetryAfterSeconds(deltaMs / 1000);
   }
   return null;
 }
@@ -211,12 +255,15 @@ type PayloadResult =
  * rejected rather than forwarded, and a missing id is rejected rather than posted as
  * `undefined`.
  *
- * `posts[0].group` carries `subjectId`, Loop Engine's own id for the draft being sent.
- * Postiz has no idempotency-key field in its public schema, so `group` is the only
- * place a stable key fits. Treat it as a correlation id for our own records, not as
- * upstream de-duplication: Postiz has an open issue about the public API mishandling
- * `posts[].group`, so nothing here may assume Postiz acts on it. Preventing a
- * duplicate post is the caller's job, and the key is what makes that check possible.
+ * There is no `group` field, and none should be added. `subjectId` was considered for
+ * it, but `group` is not part of Postiz's verified payload schema, Postiz has an open
+ * issue about the public API mishandling `posts[].group`, and its create path is a
+ * create-or-update keyed on group — so a stable value there could make a retried send
+ * silently replace the earlier post instead of preventing a duplicate, or be rejected
+ * outright by a whitelisting DTO. No production caller reads it back either. Unverified
+ * upstream behavior for zero present benefit is the wrong trade. Postiz's public API
+ * exposes no idempotency key of any kind; see the comment on the fetch-failure path in
+ * `send` below for what that means for duplicate posts.
  */
 function toPostizPayload(message: OutboundMessage): PayloadResult {
   const rawId = message.meta?.integrationId ?? message.meta?.channelId;
@@ -248,7 +295,6 @@ function toPostizPayload(message: OutboundMessage): PayloadResult {
           integration: { id: rawId },
           value: [{ content: message.body, image: [] }],
           settings: { __type: POSTIZ_SETTINGS_TYPE },
-          group: message.subjectId,
         },
       ],
     },
@@ -259,6 +305,7 @@ export function createPostizAdapter(config?: PostizConfig): ChannelAdapter {
   const cfg = config ?? configFromEnv(process.env);
   const base = apiBase(cfg.url);
   const timeoutMs = cfg.timeoutMs ?? 10_000;
+  const external = createExternalScrubber(cfg.apiKey);
 
   function headers(): Record<string, string> {
     return {
@@ -308,11 +355,12 @@ export function createPostizAdapter(config?: PostizConfig): ChannelAdapter {
       // A network failure or client-side abort is transient by nature, but "transient"
       // is not "harmless": the request may have already reached Postiz and been queued
       // before the response (or the connection) was lost, so a retry here can produce
-      // a second, publicly-visible post rather than merely repeating a no-op. That is
-      // exactly why toPostizPayload attaches `group` from `subjectId`. The caller must
-      // check for an already-published post carrying that key before honoring this
-      // retry; Postiz is not known to de-duplicate on `group` and must not be relied
-      // on to do it.
+      // a second, publicly-visible post rather than merely repeating a no-op. Postiz's
+      // public API exposes no idempotency key, so nothing in this adapter, and nothing
+      // upstream, prevents that duplicate. Preventing it is the caller's responsibility:
+      // the caller must record its own send attempts against `message.subjectId` and
+      // check that record before honoring this `retry` outcome. This comment must not be
+      // read as implying that upstream, or this adapter, already does that job.
       const detail = err instanceof Error ? err.message : String(err);
       return {
         status: "retry",

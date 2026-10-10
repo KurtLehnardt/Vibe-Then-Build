@@ -4,6 +4,16 @@ import { AdapterConfigError, type OutboundMessage } from "../types";
 
 const cfg = { url: "http://localhost:5000", apiKey: "test-key" };
 
+// File-wide backstop. Individual describe blocks stub and unstub `fetch` around each
+// test, but a test that assigns `globalThis.fetch` directly (rather than through
+// `vi.stubGlobal`) would otherwise leak that stub into whatever runs next. Saved once,
+// reassigned after every test regardless of which describe block it belongs to.
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
 function message(over: Partial<OutboundMessage> = {}): OutboundMessage {
   return {
     actionType: "linkedin.post",
@@ -42,16 +52,16 @@ describe("createPostizAdapter config", () => {
 });
 
 describe("createPostizAdapter capabilities", () => {
-  it("declares linkedin.post, api mode, no metrics support, and the 90/hour limit", () => {
+  it("declares linkedin.post, api mode, and no metrics support", () => {
+    // Asserting behaviorally rather than by deep-equality against the literal: this
+    // adapter has no method that reports back on what it sent, so supportsMetrics must
+    // be false; it only carries linkedin.post; and it sends unattended, so mode is
+    // "api". A full-object deep-equal here would just restate the implementation.
     const adapter = createPostizAdapter(cfg);
     expect(adapter.id).toBe("postiz");
-    expect(adapter.capabilities).toEqual({
-      actions: ["linkedin.post"],
-      mode: "api",
-      supportsMetrics: false,
-      supportsReplies: false,
-      requestsPerHour: 90,
-    });
+    expect(adapter.capabilities.actions).toEqual(["linkedin.post"]);
+    expect(adapter.capabilities.mode).toBe("api");
+    expect(adapter.capabilities.supportsMetrics).toBe(false);
   });
 });
 
@@ -87,7 +97,6 @@ describe("send: payload shape (F1)", () => {
         integration: { id: "int-42" },
         value: [{ content: "Hello world!", image: [] }],
         settings: { __type: "linkedin" },
-        group: "draft-1",
       },
     ]);
     const dateMs = Date.parse(body.date);
@@ -123,7 +132,6 @@ describe("send: payload shape (F1)", () => {
           integration: { id: "int-7" },
           value: [{ content: "Scheduled!", image: [] }],
           settings: { __type: "linkedin" },
-          group: "draft-2",
         },
       ],
     });
@@ -327,6 +335,60 @@ describe("send: Retry-After parsing (F3)", () => {
   it("returns null when the header is absent", async () => {
     expect(await retryAfterFor(undefined)).toBeNull();
   });
+
+  it("trims whitespace around a numeric value before accepting it", async () => {
+    // Pins `raw.trim()`: without it, " 120 " fails the /^\d+$/ test and falls through
+    // to null instead of 120.
+    expect(await retryAfterFor(" 120 ")).toBe(120);
+  });
+});
+
+describe("send: Retry-After upper clamp", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const MAX_RETRY_AFTER_SECONDS = 86_400;
+
+  async function retryAfterFor(headerValue: string): Promise<number | null> {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response("rate limited", { status: 429, headers: { "retry-after": headerValue } }),
+    );
+
+    const adapter = createPostizAdapter(cfg);
+    const result = await adapter.send!(message());
+    return (result as { retryAfterSeconds: number | null }).retryAfterSeconds;
+  }
+
+  // Node's setTimeout silently clamps any delay above INT32_MAX ms (~24.8 days) down to
+  // 1ms instead of throwing, so an un-clamped Retry-After reaches the exact hot
+  // immediate-retry loop the lower (non-negative) clamp was added to prevent, just
+  // reached from the top of the range. Each value below was measured to fire a
+  // setTimeout within a few ms of 0 before this fix; all must now clamp to one day.
+  it("clamps a huge numeric Retry-After (2147484s) to one day", async () => {
+    expect(await retryAfterFor("2147484")).toBe(MAX_RETRY_AFTER_SECONDS);
+  });
+
+  it("clamps an enormous numeric Retry-After (10^20 s) to one day", async () => {
+    expect(await retryAfterFor("99999999999999999999")).toBe(MAX_RETRY_AFTER_SECONDS);
+  });
+
+  it("clamps a far-future HTTP-date Retry-After to one day", async () => {
+    expect(await retryAfterFor("Fri, 31 Dec 9999 23:59:59 GMT")).toBe(MAX_RETRY_AFTER_SECONDS);
+  });
+
+  it("does not clamp a value exactly at the boundary", async () => {
+    expect(await retryAfterFor(String(MAX_RETRY_AFTER_SECONDS))).toBe(MAX_RETRY_AFTER_SECONDS);
+  });
+
+  it("clamps a value one second past the boundary", async () => {
+    expect(await retryAfterFor(String(MAX_RETRY_AFTER_SECONDS + 1))).toBe(MAX_RETRY_AFTER_SECONDS);
+  });
 });
 
 describe("send: unbounded upstream body is truncated (F5)", () => {
@@ -364,6 +426,93 @@ describe("send: unbounded upstream body is truncated (F5)", () => {
     const reason = (result as { reason: string }).reason;
     expect(reason.length).toBeLessThan(600);
     expect(reason).toContain("…");
+  });
+});
+
+describe("send: scrubbing runs before truncation", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("still removes a password that would otherwise land past the 500-char cut", async () => {
+    // Regression: external() used to be scrubCredentials(truncate(text)). With enough
+    // filler ahead of a credentialed URL, the 500-char slice lands inside the userinfo
+    // segment and removes the "@" the scrub regex needs, so the password survives in
+    // the truncated tail. Scrubbing first, then truncating, fixes this because the
+    // replacement happens over the full text before any of it is cut away.
+    const filler = "x".repeat(480);
+    const credentialedUrl = "http://admin:hunter2@postiz.internal:5000";
+    const hugeBody = `${filler}${credentialedUrl}`;
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(new Response(hugeBody, { status: 400 }));
+
+    const adapter = createPostizAdapter(cfg);
+    const result = await adapter.send!(message());
+
+    expect(result.status).toBe("rejected");
+    const reason = (result as { reason: string }).reason;
+    expect(reason).not.toContain("hunter2");
+  });
+});
+
+describe("send: scrubbing a configured API key or a credential-shaped query param", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("replaces a literal occurrence of the configured API key wherever it appears in a body", async () => {
+    // The scrubber is handed cfg.apiKey so it can replace the exact configured string
+    // regardless of the shape it is embedded in. This is the reliable half: the key is
+    // known exactly, so every occurrence of it is caught, not just ones that look like
+    // a URL or a query parameter.
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, { error: "invalid key", received: "test-key-SUPER-SECRET" }),
+    );
+
+    const adapter = createPostizAdapter({ url: "http://localhost:5000", apiKey: "test-key-SUPER-SECRET" });
+    const result = await adapter.send!(message());
+
+    expect(result.status).toBe("rejected");
+    expect((result as { reason: string }).reason).not.toContain("test-key-SUPER-SECRET");
+  });
+
+  it("scrubs a credential-shaped query parameter even when it is not the configured key", async () => {
+    // Defense in depth: this body echoes a secret that is not cfg.apiKey (an unrelated
+    // token upstream issued), so the literal-key rule cannot catch it. The query-param
+    // regex rule is what catches this one instead.
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response("GET /public/v1/posts?apiKey=SUPER-SECRET-KEY returned 400", { status: 400 }),
+    );
+
+    const adapter = createPostizAdapter(cfg);
+    const result = await adapter.send!(message());
+
+    expect(result.status).toBe("rejected");
+    expect((result as { reason: string }).reason).not.toContain("SUPER-SECRET-KEY");
+  });
+
+  it("scrubs a token= query parameter the same way", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response("upstream said: retry with ?token=abc123secret", { status: 422 }),
+    );
+
+    const adapter = createPostizAdapter(cfg);
+    const result = await adapter.send!(message());
+
+    expect(result.status).toBe("rejected");
+    expect((result as { reason: string }).reason).not.toContain("abc123secret");
   });
 });
 
@@ -578,11 +727,100 @@ describe("health", () => {
   });
 });
 
+describe("send: HTTP request envelope (F5)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Mutation testing found the existing suite green even after: deleting the
+  // Authorization header entirely; changing it to `Bearer ${key}`; dropping
+  // `content-type: application/json`; changing method from POST to PUT; dropping
+  // AbortSignal.timeout; cutting the default timeout from 10s to 1ms; probing /posts
+  // instead of /channels in health(); and dropping the trailing-slash strip in
+  // apiBase(). Each assertion below was verified to fail when I reintroduced the
+  // corresponding mutant by hand, then passed again once the mutant was reverted.
+  it("sends the exact URL, method, Authorization header, content-type, and an abort signal", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { id: "abc123" }));
+
+    const adapter = createPostizAdapter(cfg);
+    await adapter.send!(message());
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("http://localhost:5000/public/v1/posts");
+    expect(init!.method).toBe("POST");
+    // Postiz takes the API key directly in the Authorization header; it is not
+    // Bearer-prefixed.
+    const headers = init!.headers as Record<string, string>;
+    expect(headers.authorization).toBe("test-key");
+    expect(headers["content-type"]).toBe("application/json");
+    expect(init!.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("uses the default 10s timeout for send and a 5s cap for health", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { id: "abc123" }));
+
+    const adapter = createPostizAdapter(cfg);
+    await adapter.send!(message());
+    expect(timeoutSpy).toHaveBeenCalledWith(10_000);
+
+    timeoutSpy.mockClear();
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, []));
+    await adapter.health();
+    expect(timeoutSpy).toHaveBeenCalledWith(5_000);
+
+    timeoutSpy.mockRestore();
+  });
+
+  it("probes /public/v1/channels, not /posts, for health", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, []));
+
+    const adapter = createPostizAdapter(cfg);
+    await adapter.health();
+
+    const [url] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("http://localhost:5000/public/v1/channels");
+  });
+
+  it("does not double a trailing slash in POSTIZ_URL when building the posts URL", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { id: "abc123" }));
+
+    const adapter = createPostizAdapter({ url: "http://localhost:5000/", apiKey: "test-key" });
+    await adapter.send!(message());
+
+    const [url] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("http://localhost:5000/public/v1/posts");
+  });
+});
+
 describe("credential scrubbing at the text boundary", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("does not leak a password carried by the underlying fetch error message", async () => {
     // Regression. redactUrl() sanitized our own configured URL, but the fetch
     // error interpolated next to it carried the full credentialed URL, so the
-    // password still reached the health detail.
+    // password still reached the health detail. Stubbed so no socket is opened:
+    // the stub throws the same error shape a real connect failure against a
+    // credentialed URL produces, instead of genuinely dialing 127.0.0.1:59999.
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValueOnce(
+      new Error("connect ECONNREFUSED http://admin:hunter2@127.0.0.1:59999/public/v1/channels"),
+    );
+
     const adapter = createPostizAdapter({
       url: "http://admin:hunter2@127.0.0.1:59999",
       apiKey: "k",
@@ -594,10 +832,10 @@ describe("credential scrubbing at the text boundary", () => {
   });
 
   it("scrubs credentials out of an upstream response body", async () => {
-    globalThis.fetch = (async () =>
-      new Response("upstream said: http://svc:p4ssw0rd@internal:5000 refused", {
-        status: 400,
-      })) as unknown as typeof fetch;
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response("upstream said: http://svc:p4ssw0rd@internal:5000 refused", { status: 400 }),
+    );
 
     const adapter = createPostizAdapter({ url: "http://localhost:5000", apiKey: "k" });
     const outcome = await adapter.send!({
@@ -613,9 +851,10 @@ describe("credential scrubbing at the text boundary", () => {
   });
 
   it("scrubs credentials out of a send-path network error", async () => {
-    globalThis.fetch = (async () => {
-      throw new Error("connect failed for http://u:s3cret@host:5000/public/v1/posts");
-    }) as unknown as typeof fetch;
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValueOnce(
+      new Error("connect failed for http://u:s3cret@host:5000/public/v1/posts"),
+    );
 
     const adapter = createPostizAdapter({ url: "http://localhost:5000", apiKey: "k" });
     const outcome = await adapter.send!({

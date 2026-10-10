@@ -26,17 +26,31 @@ export class UnterminatedQuoteError extends Error {
   }
 }
 
-export function parseCsv(input: string): CsvRow[] {
+export function parseCsv(rawInput: string): CsvRow[] {
+  // Strip a single leading UTF-8 BOM (U+FEFF) before any state-machine work.
+  // Excel's "CSV UTF-8" export and Python's `encoding="utf-8-sig"` both
+  // prepend one, and when the export also quotes every field (Python's
+  // `csv.QUOTE_ALL`), the BOM lands immediately before the header row's
+  // opening quote. Handling it anywhere past this point is too late: a BOM
+  // character consumed as ordinary field content would mark the field as
+  // already started, so the quote right after it would read as a literal
+  // character instead of opening the header's quoted section, and the
+  // header would never match a known column name.
+  const input = rawInput.charCodeAt(0) === 0xfeff ? rawInput.slice(1) : rawInput;
+
   const rows: CsvRow[] = [];
   let row: string[] = [];
   let field = "";
   let inQuotes = false;
-  // True once any character has been consumed for the field currently being
-  // built, including a quote. RFC 4180 only lets a quote open a quoted
-  // section when it is the first character of a field; a quote that shows up
-  // after other characters is just a literal character in an unquoted field
-  // (e.g. `ab"c,d"e` is the two fields `ab"c` and `d"e`, not one field that
-  // merges across the comma).
+  // True once a character that is not leading horizontal whitespace has been
+  // consumed for the field currently being built, including a quote. RFC
+  // 4180 only lets a quote open a quoted section when it is the first
+  // substantive character of a field; a quote that shows up after other
+  // content is just a literal character in an unquoted field (e.g.
+  // `ab"c,d"e` is the two fields `ab"c` and `d"e`, not one field that merges
+  // across the comma). A run of plain spaces or tabs before the quote does
+  // not count as "other content" here (see the whitespace handling below),
+  // so `, "quoted"` still opens a quoted field the way `,"quoted"` does.
   let fieldStarted = false;
   // Tracks whether the current field was opened with a quote, independently
   // of `field.length`. That distinction is what lets a quoted-empty field
@@ -83,6 +97,20 @@ export function parseCsv(input: string): CsvRow[] {
     }
 
     if (ch === '"' && !fieldStarted) {
+      // `fieldStarted` being false here means every character consumed for
+      // this field so far, if any, was leading horizontal whitespace (the
+      // branch below is the only place that can add a character without
+      // setting `fieldStarted`, and it only does that for space and tab).
+      // That whitespace was tentative pending this exact decision, so it is
+      // discarded now that a quote has arrived to open the field for real:
+      // a space or tab before an opening quote is not part of the quoted
+      // value it introduces. This is a distinct case from a quote appearing
+      // after genuine content (F7's `ab"c,d"e`), where `fieldStarted` is
+      // already true and this branch does not fire, so that quote stays a
+      // literal character instead of opening a section. Do not merge the
+      // two: one discards insignificant leading padding, the other refuses
+      // to let a quote retroactively reinterpret data already written.
+      field = "";
       inQuotes = true;
       fieldStarted = true;
       fieldWasQuoted = true;
@@ -115,7 +143,16 @@ export function parseCsv(input: string): CsvRow[] {
       continue;
     }
     field += ch;
-    fieldStarted = true;
+    // A space or tab does not set `fieldStarted` while nothing but
+    // whitespace has been seen yet, so a quote right after it can still open
+    // a quoted field (see the branch above). Once any non-whitespace
+    // character has set `fieldStarted`, later whitespace just falls through
+    // this same line and is appended normally; it cannot unset the flag, so
+    // mid-field spaces (e.g. the preserved `"a,   ,b"` whitespace-only
+    // field) are unaffected.
+    if (ch !== " " && ch !== "\t") {
+      fieldStarted = true;
+    }
     i += 1;
   }
 
