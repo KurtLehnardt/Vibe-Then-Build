@@ -3,7 +3,7 @@
  *
  * A channel is anything that can carry an action to the outside world, or
  * bring work in from it. Adapters are deliberately thin: they translate
- * between Loop Engine's own types and one external system, and they never
+ * between Vibe Then Build's own types and one external system, and they never
  * decide whether something may send. That decision belongs to the policy
  * engine, which runs before any adapter is called.
  *
@@ -40,7 +40,7 @@ export interface AdapterCapabilities {
 
 export interface OutboundMessage {
   actionType: ActionType;
-  /** Loop Engine's own id for the draft or touch being sent. */
+  /** Vibe Then Build's own id for the draft or touch being sent. */
   subjectId: string;
   body: string;
   /** Subject line for email; ignored by adapters that have no concept of it. */

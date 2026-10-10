@@ -9,7 +9,7 @@
  *
  * An adapter whose configuration is absent is not an error. It is recorded as
  * unavailable, with the reason, and the rest of the registry works. Running
- * Loop Engine without Postiz is a legitimate configuration, not a broken one.
+ * Vibe Then Build without Postiz is a legitimate configuration, not a broken one.
  *
  * Ambiguity, by contrast, is an error. If two configured adapters both claim
  * an action, the registry refuses to pick for you and names the env var that

@@ -1,4 +1,4 @@
-# Loop Engine, self-hosted and local-first.
+# Vibe Then Build, self-hosted and local-first.
 #
 #   docker compose up -d
 #   docker compose exec app pnpm db:migrate
@@ -11,7 +11,7 @@ services:
   # Docker's short port syntax (e.g. "5432:5432") binds 0.0.0.0 by default,
   # which publishes the service on every network interface — on a shared
   # office network, a coworking space, or a café Wi-Fi, that makes Postgres
-  # (default creds loop/loop), Ollama (no auth), the LiteLLM gateway, and the
+  # (default creds vtb/loop), Ollama (no auth), the LiteLLM gateway, and the
   # app itself reachable by anyone else on that network. If a frontier API key
   # is configured, a stranger who can reach the gateway can spend it.
   #
@@ -26,15 +26,15 @@ services:
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: loop
+      POSTGRES_USER: vtb
       POSTGRES_PASSWORD: loop
-      POSTGRES_DB: loop_engine
+      POSTGRES_DB: vibe_then_build
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U loop -d loop_engine"]
+      test: ["CMD-SHELL", "pg_isready -U vtb -d vibe_then_build"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -79,7 +79,7 @@ services:
   app:
     build: .
     environment:
-      DATABASE_URL: postgresql://loop:loop@db:5432/loop_engine
+      DATABASE_URL: postgresql://vtb:loop@db:5432/vibe_then_build
       LLM_GATEWAY_URL: http://gateway:4000
       # Must equal the gateway's LITELLM_MASTER_KEY above -- see .env.example.
       LLM_GATEWAY_KEY: ${LLM_GATEWAY_KEY:?Set LLM_GATEWAY_KEY in .env (openssl rand -hex 32), matching LITELLM_MASTER_KEY. See .env.example.}
@@ -99,7 +99,7 @@ services:
 
   # Postiz, self-hosted, for social publishing. Optional and heavy: it brings
   # its own Postgres and Redis, separate from the ones above, so it is left
-  # commented out rather than wired into `depends_on`. Loop Engine works fully
+  # commented out rather than wired into `depends_on`. Vibe Then Build works fully
   # without it — publishing simply stays unavailable until POSTIZ_URL and
   # POSTIZ_API_KEY are set in .env. See docs/integrations.md for the decision
   # record on why publishing is delegated to Postiz rather than built in-tree.

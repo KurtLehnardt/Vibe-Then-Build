@@ -1,7 +1,7 @@
 /**
  * Autonomy levels.
  *
- * Every outbound action in Loop Engine is configured at one of these levels.
+ * Every outbound action in Vibe Then Build is configured at one of these levels.
  * The operator chooses the level; the ceiling in `defaults.ts` is what the
  * published build refuses to exceed, and each ceiling has a stated reason.
  */

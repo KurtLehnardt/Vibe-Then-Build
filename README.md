@@ -1,4 +1,4 @@
-# Loop Engine
+# Vibe Then Build
 
 An operator cockpit for a one-person (or few-person) AI software and consulting practice. It holds
 the positioning record, drafts content in your own voice, researches and sequences outreach, tracks
@@ -15,7 +15,7 @@ Ollama and needs no cloud API key.
 
 Most open-source tools in this space automate the top of the funnel — find leads, send messages,
 schedule posts. Very few follow a lead through to delivered work, and almost none tell you what
-your margin was. Loop Engine is built around the second half: pricing, delivery, and cost control,
+your margin was. Vibe Then Build is built around the second half: pricing, delivery, and cost control,
 with the acquisition half integrated rather than reinvented. See [Prior art](#prior-art).
 
 ## Where it stands on platform terms
@@ -28,7 +28,7 @@ personal profile requires approved partner access to the Member Posts API. Autom
 DM tooling is the leading cause of account restriction — which destroys the exact asset the funnel
 depends on.
 
-So Loop Engine does not automate LinkedIn messaging, and it does not ship a headless browser that
+So Vibe Then Build does not automate LinkedIn messaging, and it does not ship a headless browser that
 logs into your account. For LinkedIn it researches, drafts, sequences, schedules, and records; a
 person sends from their own browser session. Channels with an official sending path — Gmail and
 SMTP, Upwork and RFP feeds, your own web forms — can send unattended.
@@ -69,10 +69,25 @@ a suppression list, and a global kill switch that overrides everything.
 
 ## Install
 
+> **Renamed from Loop Engine.** This project was renamed from Loop Engine to Vibe Then Build. The
+> Postgres role, password, and database name changed along with it (`loop`/`loop`/`loop_engine` is
+> now `vtb`/`loop`/`vibe_then_build`). If you already ran the stack under the old name, your
+> existing `pgdata/` volume holds a database under the old name and will not be picked up as-is.
+> This is pre-release, so the fix is to discard it, not migrate it: stop the stack, remove the
+> `pgdata/` directory, bring the stack back up, then re-run migrations and the seed script.
+>
+> ```bash
+> docker compose down
+> rm -rf pgdata
+> docker compose up -d db ollama gateway
+> pnpm db:migrate
+> pnpm seed
+> ```
+
 Requires Docker and Node 22+.
 
 ```bash
-git clone <your-fork> loop-engine && cd loop-engine
+git clone <your-fork> vibe-then-build && cd vibe-then-build
 cp .env.example .env
 ```
 
@@ -175,13 +190,17 @@ no action ships above its own ceiling.
   fit scoring.
 - **P3** — delivery templates and handoff-pack generation; eval runner results; per-engagement
   margin report; adapter contribution guide.
+- **P4, not started** — a workspace for organizing the prompts and work given to the AI agents that
+  build client software and automate business workflows. This is part of the project's intent and
+  none of it exists yet: there is no agent workspace, no prompt library, and no agent run history.
+  It is listed here so the ambition is recorded without the README implying the capability ships.
 
 For publishing to social platforms, P1 integrates Postiz rather than rebuilding a scheduler; for
 lead discovery it delegates to OpenOutreach. See [Integrations](#integrations) for how and why.
 
 ## Integrations
 
-Loop Engine composes with existing open-source tools at the process boundary rather than merging
+Vibe Then Build composes with existing open-source tools at the process boundary rather than merging
 their source: publishing goes to Postiz over its public API, lead discovery delegates to
 OpenOutreach as a separate process whose CSV export is read on disk. Both are optional — unset
 their environment variables and the rest of the system runs exactly as before. See
